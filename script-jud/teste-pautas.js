@@ -15,16 +15,26 @@ async function consultarPautas() {
 
     const resposta = await fetch(url, {
         headers: {
-            Accept: "application/json"
-        },
+    Accept: "application/json",
+    "x-grau-instancia": "1"
+    },
         signal: AbortSignal.timeout(30000)
     });
 
     if (!resposta.ok) {
-        throw new Error(
-            `Consulta recusada ou indisponível: HTTP ${resposta.status}`
-        );
-    }
+    const corpo = await resposta.text();
+
+    console.log("Status:", resposta.status);
+    console.log(
+        "Tipo da resposta:",
+        resposta.headers.get("content-type")
+    );
+    console.log("Mensagem do servidor:", corpo.slice(0, 2000));
+
+    throw new Error(
+        `Consulta recusada ou indisponível: HTTP ${resposta.status}`
+    );
+}
 
     const conteudo = resposta.headers.get("content-type") || "";
 

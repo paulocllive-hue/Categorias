@@ -1,6 +1,7 @@
 const { chromium } = require("playwright");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const readline = require("node:readline/promises");
 
 function campoCsv(valor) {
     let texto = String(valor ?? "");
@@ -149,8 +150,79 @@ async function iniciar() {
                 timeout: 60000
             }
         );
+
+        const terminal = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+try {
+    await terminal.question(
+        "\nSelecione o 1º grau e a vara no navegador. " +
+        "Depois volte aqui e pressione Enter..."
+    );
+} finally {
+    terminal.close();
+}
+
+const campoData = pagina.locator(
+    'input[aria-label="Filtro data da pauta"]'
+);
+
+await campoData.fill("");
+await campoData.pressSequentially("18/11/2026", {
+    delay: 100
+});
+await campoData.press("Tab");
+
+console.log("Data preenchida:", await campoData.inputValue());
+
+pagina.on("request", (requisicao) => {
+    const url = new URL(requisicao.url());
+
+    if (
+        url.hostname === "pje.trt23.jus.br" &&
+        url.pathname === "/pje-consulta-api/api/audiencias"
+    ) {
+        console.log("Consulta enviada:", {
+            metodo: requisicao.method(),
+            data: url.searchParams.get("data"),
+            orgao: url.searchParams.get("idOj")
+        });
+    }
+});
+
+console.log("Vou clicar em PESQUISAR.");
+
+// Começa a aguardar antes de clicar, para não perder a resposta.
+const respostaPendente = pagina.waitForResponse(
+    (resposta) => {
+        const url = new URL(resposta.url());
+
+        return (
+            url.hostname === "pje.trt23.jus.br" &&
+            url.pathname === "/pje-consulta-api/api/audiencias" &&
+            url.searchParams.get("data") === "2026-11-18" &&
+            resposta.request().method() === "GET"
+        );
+    },
+    { timeout: 30000 }
+);
+
+await Promise.all([
+    respostaPendente,
+    pagina.getByRole("button", {
+    name: "PESQUISAR",
+    exact: true
+}).click().then(() => {
+    console.log("Clique automático concluído.");
+})
+]);
+
+console.log("Resposta da pesquisa recebida. Confira o resultado acima.");
+
     } catch (erro) {
-        console.log("Não foi possível concluir a navegação:", erro.message);
+        console.log("Falha na navegação ou pesquisa automática:", erro.message);
         console.log("Confira a página aberta no navegador.");
     }
 }

@@ -6,7 +6,7 @@ const readline = require("node:readline/promises");
 function campoCsv(valor) {
     let texto = String(valor ?? "");
 
-    // Evita que o Excel interprete conteúdo como fórmula.
+    // Evita interpretar conteúdo como fórmula no Excel.
     if (/^[=+\-@\t\r\n]/.test(texto)) {
         texto = "'" + texto;
     }
@@ -45,6 +45,7 @@ async function exportarCsv(audiencias, url, paginaConsultada) {
         .join("\r\n");
 
     const pasta = path.join(__dirname, "resultados");
+
     await fs.mkdir(pasta, { recursive: true });
 
     const instante = new Date()
@@ -61,6 +62,15 @@ async function exportarCsv(audiencias, url, paginaConsultada) {
     console.log("CSV salvo em:", arquivo);
 }
 
+function ehConsultaAudiencias(endereco) {
+    const url = new URL(endereco);
+
+    return (
+        url.hostname === "pje.trt23.jus.br" &&
+        url.pathname === "/pje-consulta-api/api/audiencias"
+    );
+}
+
 async function iniciar() {
     const navegador = await chromium.launch({
         headless: false
@@ -69,23 +79,45 @@ async function iniciar() {
     const contexto = await navegador.newContext();
     const pagina = await contexto.newPage();
 
-    // Acompanha somente as respostas da consulta de audiências.
-    pagina.on("response", async (resposta) => {
-        const url = new URL(resposta.url());
+    pagina.on("request", (requisicao) => {
+        if (!ehConsultaAudiencias(requisicao.url())) {
+            return;
+        }
 
-        if (
-            url.hostname !== "pje.trt23.jus.br" ||
-            url.pathname !== "/pje-consulta-api/api/audiencias"
-        ) {
+        const url = new URL(requisicao.url());
+
+        console.log("\nConsulta enviada:", {
+            metodo: requisicao.method(),
+            data: url.searchParams.get("data"),
+            orgao: url.searchParams.get("idOj")
+        });
+    });
+
+    pagina.on("requestfailed", (requisicao) => {
+        if (!ehConsultaAudiencias(requisicao.url())) {
+            return;
+        }
+
+        console.error(
+            "Falha de rede na consulta:",
+            requisicao.failure()?.errorText
+        );
+    });
+
+    pagina.on("response", async (resposta) => {
+        if (!ehConsultaAudiencias(resposta.url())) {
             return;
         }
 
         try {
+            const url = new URL(resposta.url());
+
             console.log("\nStatus da consulta:", resposta.status());
 
             if (!resposta.ok()) {
-                console.log(
-                    "Consulta recusada. Interrompa o teste se o acesso continuar negado."
+                console.error(
+                    "Consulta recusada ou indisponível. " +
+                    "Se o acesso continuar negado, encerre o teste."
                 );
                 return;
             }
@@ -94,25 +126,34 @@ async function iniciar() {
                 resposta.headers()["content-type"] || "";
 
             if (!tipoConteudo.includes("application/json")) {
-                console.log("A resposta não contém JSON.");
+                console.error("A resposta não contém JSON.");
                 return;
             }
 
             const dados = await resposta.json();
 
             if (!Array.isArray(dados.resultado)) {
-                console.log("Formato de resposta inesperado.");
+                console.error(
+                    "A resposta não contém a lista esperada de audiências."
+                );
                 return;
             }
 
-            const selecionadas = dados.resultado.filter((audiencia) =>
-                /^(inicial|una)\b/i.test(
-                    String(audiencia.tipo || "").trim()
-                )
+            const selecionadas = dados.resultado.filter(
+                (audiencia) =>
+                    /^(inicial|una)\b/i.test(
+                        String(audiencia.tipo || "").trim()
+                    )
             );
 
-            console.log("Data consultada:", url.searchParams.get("data"));
-            console.log("Órgão — ID:", url.searchParams.get("idOj"));
+            console.log(
+                "Data consultada:",
+                url.searchParams.get("data")
+            );
+            console.log(
+                "Órgão — ID:",
+                url.searchParams.get("idOj")
+            );
             console.log("Página:", dados.pagina);
             console.log("Total de páginas:", dados.qtdPaginas);
             console.log("Total de registros:", dados.totalRegistros);
@@ -130,17 +171,19 @@ async function iniciar() {
                     situacao: audiencia.status
                 }))
             );
-            await exportarCsv(selecionadas, url, dados.pagina);
+
+            await exportarCsv(
+                selecionadas,
+                url,
+                dados.pagina
+            );
         } catch (erro) {
-            console.error("Erro ao ler a resposta:", erro.message);
+            console.error(
+                "Erro ao ler ou exportar a resposta:",
+                erro.message
+            );
         }
     });
-
-    console.log("No navegador que abrir:");
-    console.log("1. Selecione o grau, a vara e a data.");
-    console.log("2. Clique em Pesquisar.");
-    console.log("3. Confira o resultado neste terminal.");
-    console.log("Feche o navegador quando terminar.");
 
     try {
         await pagina.goto(
@@ -150,80 +193,102 @@ async function iniciar() {
                 timeout: 60000
             }
         );
-
-        const terminal = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
-try {
-    await terminal.question(
-        "\nSelecione o 1º grau e a vara no navegador. " +
-        "Depois volte aqui e pressione Enter..."
-    );
-} finally {
-    terminal.close();
-}
-
-const campoData = pagina.locator(
-    'input[aria-label="Filtro data da pauta"]'
-);
-
-await campoData.fill("");
-await campoData.pressSequentially("18/11/2026", {
-    delay: 100
-});
-await campoData.press("Tab");
-
-console.log("Data preenchida:", await campoData.inputValue());
-
-pagina.on("request", (requisicao) => {
-    const url = new URL(requisicao.url());
-
-    if (
-        url.hostname === "pje.trt23.jus.br" &&
-        url.pathname === "/pje-consulta-api/api/audiencias"
-    ) {
-        console.log("Consulta enviada:", {
-            metodo: requisicao.method(),
-            data: url.searchParams.get("data"),
-            orgao: url.searchParams.get("idOj")
-        });
-    }
-});
-
-console.log("Vou clicar em PESQUISAR.");
-
-// Começa a aguardar antes de clicar, para não perder a resposta.
-const respostaPendente = pagina.waitForResponse(
-    (resposta) => {
-        const url = new URL(resposta.url());
-
-        return (
-            url.hostname === "pje.trt23.jus.br" &&
-            url.pathname === "/pje-consulta-api/api/audiencias" &&
-            url.searchParams.get("data") === "2026-11-18" &&
-            resposta.request().method() === "GET"
-        );
-    },
-    { timeout: 30000 }
-);
-
-await Promise.all([
-    respostaPendente,
-    pagina.getByRole("button", {
-    name: "PESQUISAR",
-    exact: true
-}).click().then(() => {
-    console.log("Clique automático concluído.");
-})
-]);
-
-console.log("Resposta da pesquisa recebida. Confira o resultado acima.");
-
     } catch (erro) {
-        console.log("Falha na navegação ou pesquisa automática:", erro.message);
-        console.log("Confira a página aberta no navegador.");
+        console.error(
+            "Não foi possível abrir a página:",
+            erro.message
+        );
+        console.log("Confira o navegador aberto.");
+        return;
+    }
+
+    const terminal = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    try {
+        await terminal.question(
+            "\nNo navegador, selecione o 1º grau e a vara. " +
+            "Não clique em Pesquisar. " +
+            "Depois volte aqui e pressione Enter..."
+        );
+    } finally {
+        terminal.close();
+    }
+
+    try {
+        const campoData = pagina.locator(
+            'input[aria-label="Filtro data da pauta"]'
+        );
+
+        await campoData.fill("");
+
+        await campoData.pressSequentially(
+            "18/11/2026",
+            { delay: 100 }
+        );
+
+        await campoData.press("Tab");
+
+        console.log(
+            "Data preenchida:",
+            await campoData.inputValue()
+        );
+
+        const botaoPesquisar = pagina.getByRole("button", {
+            name: /^\s*pesquisar\s*$/i
+        });
+
+        const quantidade = await botaoPesquisar.count();
+
+        console.log(
+            "Botões PESQUISAR encontrados:",
+            quantidade
+        );
+
+        if (quantidade !== 1) {
+            console.error(
+                "Não foi possível identificar um único botão Pesquisar."
+            );
+            console.log(
+                "Botões visíveis encontrados na página:"
+            );
+
+            console.log(
+                await pagina.getByRole("button").allTextContents()
+            );
+
+            return;
+        }
+
+        console.log(
+            "Botão habilitado:",
+            await botaoPesquisar.isEnabled()
+        );
+
+        console.log("Vou clicar em PESQUISAR.");
+
+        await botaoPesquisar.click({
+            timeout: 10000
+        });
+
+        console.log("Clique automático concluído.");
+        console.log(
+            "Aguarde a resposta e a mensagem de CSV salvo."
+        );
+        console.log(
+            "Feche o navegador quando terminar."
+        );
+    } catch (erro) {
+        console.error(
+            "Falha no preenchimento ou clique automático:",
+            erro.message
+        );
+
+        console.log(
+            "Mantenha o navegador aberto para conferir a tela."
+        );
     }
 }
 

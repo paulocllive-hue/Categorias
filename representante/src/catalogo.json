@@ -1,0 +1,59 @@
+{
+  "demonstracao": true,
+  "produtos": [
+    {
+      "id": "kamai-gin",
+      "marca": "kamai",
+      "nome": "Kamai Sunset · London Dry Gin",
+      "apresentacao": "700 ml",
+      "venda": "garrafa",
+      "imagem": "kamai-gin.webp",
+      "precos": { "varejista": 9890, "atacadista": 8690, "distribuidor": 7490 }
+    },
+    {
+      "id": "brisa-400",
+      "marca": "mega",
+      "nome": "Batata Palha Brisa Tradicional",
+      "apresentacao": "400 g",
+      "venda": "pacote",
+      "imagem": "brisa-400.webp",
+      "precos": { "varejista": 1890, "atacadista": 1590, "distribuidor": 1390 }
+    },
+    {
+      "id": "brisa-200",
+      "marca": "mega",
+      "nome": "Batata Palha Brisa Tradicional",
+      "apresentacao": "200 g",
+      "venda": "pacote",
+      "imagem": "brisa-linha.webp",
+      "precos": { "varejista": 1090, "atacadista": 920, "distribuidor": 790 }
+    },
+    {
+      "id": "brisa-70",
+      "marca": "mega",
+      "nome": "Batata Palha Brisa Tradicional",
+      "apresentacao": "70 g",
+      "venda": "pacote",
+      "imagem": "brisa-linha.webp",
+      "precos": { "varejista": 490, "atacadista": 410, "distribuidor": 350 }
+    },
+    {
+      "id": "doce-500",
+      "marca": "doce",
+      "nome": "Açúcar Mascavo Doce Bem",
+      "apresentacao": "500 g",
+      "venda": "pacote",
+      "imagem": "doce-500.webp",
+      "precos": { "varejista": 1190, "atacadista": 990, "distribuidor": 870 }
+    },
+    {
+      "id": "doce-1000",
+      "marca": "doce",
+      "nome": "Açúcar Mascavo Doce Bem",
+      "apresentacao": "1 kg",
+      "venda": "pacote",
+      "imagem": "doce-1000.webp",
+      "precos": { "varejista": 1990, "atacadista": 1740, "distribuidor": 1490 }
+    }
+  ]
+}

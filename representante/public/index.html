@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Catálogo da MSC Representações para varejistas, atacadistas e distribuidores. Conheça Kamai, Mega Batatas e Doce Bem.">
+  <title>MSC Representações | Catálogo comercial</title>
+  <link rel="stylesheet" href="/estilo.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="pular" href="#principal">Ir para o conteúdo</a>
+  <header class="cabecalho">
+    <div class="container barra">
+      <a class="logo" href="#" aria-label="MSC Representações, página inicial">
+        <span class="logo-simbolo" aria-hidden="true">M</span>
+        <span>MSC<span class="logo-subtitulo">REPRESENTAÇÕES</span></span>
+      </a>
+      <nav aria-label="Marcas representadas">
+        <a href="#kamai">Kamai</a>
+        <a href="#mega">Mega Batatas</a>
+        <a href="#doce">Doce Bem</a>
+      </nav>
+      <div class="acoes">
+        <button type="button" class="acao-conta" id="conta">Entrar</button>
+        <button type="button" class="botao botao-carrinho" id="carrinho">Carrinho <span id="quantidade">0</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="principal">
+    <section class="abertura" aria-labelledby="titulo">
+      <div class="container abertura-grid">
+        <div class="abertura-texto">
+          <p class="sobretitulo"><span></span> Catálogo comercial</p>
+          <h1 id="titulo">Grandes marcas<br>para o seu <em>negócio.</em></h1>
+          <p class="introducao">Conheça o portfólio da MSC e faça pedidos com as condições comerciais do seu perfil.</p>
+          <a class="botao botao-claro" href="#marcas">Explorar marcas <span aria-hidden="true">↓</span></a>
+          <p class="segmentos">Para varejistas, atacadistas e distribuidores</p>
+        </div>
+        <div class="vitrine" aria-hidden="true">
+          <div class="foto-gin"><img src="/img/kamai-gin.webp" alt="" width="488" height="649"></div>
+          <div class="foto-brisa"><img src="/img/brisa-400.webp" alt="" width="646" height="900"></div>
+          <div class="foto-doce"><img src="/img/doce-500.webp" alt="" width="643" height="900"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="container portfolio" id="marcas">
+      <h2>Marcas representadas</h2>
+      <div class="marcas">
+        <section class="marca marca-kamai" id="kamai" aria-labelledby="titulo-kamai">
+          <div class="marca-visual kamai-visual">
+            <img src="/img/kamai-gin.webp" alt="Garrafa de gin Kamai Sunset" loading="lazy" width="488" height="649">
+          </div>
+          <div class="marca-texto">
+            <img class="assinatura kamai-assinatura" src="/img/kamai-logo.webp" alt="" loading="lazy">
+            <h3 id="titulo-kamai">Kamai Sunset</h3>
+            <p>London Dry Gin em garrafa de 700 ml para o portfólio de bebidas da sua empresa.</p>
+            <button type="button" class="botao botao-pedido" data-marca="kamai" aria-label="Fazer pedido de Kamai">Fazer pedido <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+
+        <section class="marca marca-mega" id="mega" aria-labelledby="titulo-mega">
+          <div class="marca-visual mega-visual">
+            <img src="/img/brisa-linha.webp" alt="Embalagens de batata palha Brisa Tradicional" loading="lazy" width="1250" height="900">
+          </div>
+          <div class="marca-texto">
+            <img class="assinatura" src="/img/mega-logo.webp" alt="" loading="lazy">
+            <h3 id="titulo-mega">Mega Batatas</h3>
+            <p>Batata palha Brisa Tradicional em embalagens de 70 g, 200 g e 400 g.</p>
+            <button type="button" class="botao botao-pedido" data-marca="mega" aria-label="Fazer pedido de Mega Batatas">Fazer pedido <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+
+        <section class="marca marca-doce" id="doce" aria-labelledby="titulo-doce">
+          <div class="marca-visual doce-visual">
+            <img src="/img/doce-500.webp" alt="Açúcar mascavo Doce Bem de 500 g" loading="lazy" width="643" height="900">
+            <img src="/img/doce-1000.webp" alt="Açúcar mascavo Doce Bem de 1 kg" loading="lazy" width="548" height="900">
+          </div>
+          <div class="marca-texto">
+            <img class="assinatura doce-assinatura" src="/img/doce-logo.webp" alt="" loading="lazy">
+            <h3 id="titulo-doce">Doce Bem</h3>
+            <p>Açúcar mascavo em embalagens de 500 g e 1 kg para a linha de produtos naturais.</p>
+            <button type="button" class="botao botao-pedido" data-marca="doce" aria-label="Fazer pedido de Doce Bem">Fazer pedido <span aria-hidden="true">↗</span></button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container rodape">
+      <a class="logo" href="#"><span class="logo-simbolo" aria-hidden="true">M</span><span>MSC<span class="logo-subtitulo">REPRESENTAÇÕES</span></span></a>
+      <a href="#marcas">Ver marcas ↑</a>
+    </div>
+  </footer>
+
+  <dialog id="painel" aria-labelledby="painel-titulo">
+    <div class="painel-cabecalho">
+      <h2 id="painel-titulo"></h2>
+      <button class="fechar" id="fechar" type="button" aria-label="Fechar">×</button>
+    </div>
+    <div class="painel-corpo">
+      <p class="painel-mensagem" id="mensagem" role="status" hidden></p>
+      <div id="conteudo"></div>
+    </div>
+  </dialog>
+  <p id="aviso" class="aviso" role="status" hidden></p>
+
+  <template id="cadastro-template">
+    <form class="formulario" data-form="cadastro">
+      <label>Nome do responsável<input name="nome" autocomplete="name" required minlength="2" maxlength="100"></label>
+      <label>Razão social<input name="razao_social" autocomplete="organization" required minlength="2" maxlength="150"></label>
+      <label>CNPJ<input name="cnpj" required minlength="14" maxlength="24" autocapitalize="characters" spellcheck="false"></label>
+      <label>Perfil comercial
+        <select name="perfil" required>
+          <option value="">Selecione</option>
+          <option value="varejista">Varejista</option>
+          <option value="atacadista">Atacadista</option>
+          <option value="distribuidor">Distribuidor</option>
+        </select>
+      </label>
+      <label>E-mail<input type="email" name="email" autocomplete="email" required maxlength="254"></label>
+      <label>Senha<input type="password" name="senha" autocomplete="new-password" required minlength="10" maxlength="128"><small>Use pelo menos 10 caracteres.</small></label>
+      <fieldset>
+        <legend>Endereço de entrega</legend>
+        <div class="campos-endereco">
+          <label>CEP<input name="cep" autocomplete="postal-code" inputmode="numeric" required maxlength="9"></label>
+          <label>UF<input name="uf" autocomplete="address-level1" required minlength="2" maxlength="2" autocapitalize="characters"></label>
+          <label class="campo-largo">Logradouro<input name="logradouro" autocomplete="address-line1" required maxlength="150"></label>
+          <label>Número<input name="numero" required maxlength="20"></label>
+          <label>Complemento<input name="complemento" autocomplete="address-line2" maxlength="100"></label>
+          <label>Bairro<input name="bairro" autocomplete="address-level3" required maxlength="80"></label>
+          <label>Cidade<input name="cidade" autocomplete="address-level2" required maxlength="80"></label>
+        </div>
+      </fieldset>
+      <button class="botao botao-pedido" type="submit">Criar conta</button>
+      <button class="link" data-acao="login" type="button">Já tenho uma conta</button>
+    </form>
+  </template>
+
+  <template id="login-template">
+    <form class="formulario" data-form="login">
+      <label>E-mail<input type="email" name="email" autocomplete="username" required maxlength="254"></label>
+      <label>Senha<input type="password" name="senha" autocomplete="current-password" required maxlength="128"></label>
+      <button class="botao botao-pedido" type="submit">Entrar</button>
+      <button class="link" data-acao="cadastro" type="button">Criar conta para minha empresa</button>
+    </form>
+  </template>
+</body>
+</html>

@@ -13,6 +13,13 @@
   background: var(--creme);
   line-height: 1.55;
 }
+
+/*.logo-imagem {
+  
+  height: 150px;
+  object-fit: contain;
+}*/
+
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: inherit; }

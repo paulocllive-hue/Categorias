@@ -387,3 +387,52 @@ conteudo.addEventListener('submit', (evento) => {
     return mostrarConta();
   }, form.querySelector('[type="submit"]'));
 });
+
+{
+  const carrossel = document.querySelector('.carrossel-vitrine');
+
+  if (carrossel) {
+    const fotos = [...carrossel.querySelectorAll('.carrossel-fotos img')];
+    const anterior = carrossel.querySelector('[data-carrossel-anterior]');
+    const proxima = carrossel.querySelector('[data-carrossel-proxima]');
+    const pausa = carrossel.querySelector('[data-carrossel-pausa]');
+
+    let fotoAtual = 0;
+    let temporizador = null;
+
+    function trocarFoto(passo) {
+      fotos[fotoAtual].hidden = true;
+      fotoAtual = (fotoAtual + passo + fotos.length) % fotos.length;
+      fotos[fotoAtual].hidden = false;
+    }
+
+    function iniciarRotacao() {
+      clearInterval(temporizador);
+      temporizador = setInterval(() => trocarFoto(1), 4000);
+      pausa.textContent = 'Pausar';
+    }
+
+    function navegar(passo) {
+      trocarFoto(passo);
+
+      if (temporizador !== null) {
+        iniciarRotacao();
+      }
+    }
+
+    anterior.addEventListener('click', () => navegar(-1));
+    proxima.addEventListener('click', () => navegar(1));
+
+    pausa.addEventListener('click', () => {
+      if (temporizador === null) {
+        iniciarRotacao();
+      } else {
+        clearInterval(temporizador);
+        temporizador = null;
+        pausa.textContent = 'Reproduzir';
+      }
+    });
+
+    iniciarRotacao();
+  }
+}

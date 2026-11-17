@@ -15,7 +15,7 @@
       <a class="logo" href="#" aria-label="MSC Representações, página inicial">
         <img class="logo-imagem" src="img\logo A14 200.png" alt="">
       
-        <span>A14<span class="logo-subtitulo">REPRESENTAÇÕES</span></span>
+        <span class="logo-subtitulo">REPRESENTAÇÕES</span>
       </a>
       <nav aria-label="Marcas representadas">
         <a href="#kamai">Kamai</a>
@@ -39,11 +39,19 @@
           <a class="botao botao-claro" href="#marcas">Explorar marcas <span aria-hidden="true">↓</span></a>
           <p class="segmentos">Para varejistas, atacadistas e distribuidores</p>
         </div>
-        <div class="vitrine" aria-hidden="true">
-          <div class="foto-gin"><img src="/img/kamai-gin.webp" alt="" width="488" height="649"></div>
-          <div class="foto-brisa"><img src="/img/brisa-400.webp" alt="" width="646" height="900"></div>
-          <div class="foto-doce"><img src="/img/doce-500.webp" alt="" width="643" height="900"></div>
-        </div>
+        <div class="vitrine carrossel-vitrine" aria-label="Produtos em destaque">
+  <div class="carrossel-fotos">
+    <img src="img/kamai-gin.webp" alt="Gin Kamai Sunset">
+    <img src="img/brisa-400.webp" alt="Batata Palha Brisa Tradicional" hidden>
+    <img src="img/doce-1000.webp" alt="Açúcar Mascavo Doce Bem" hidden>
+  </div>
+
+  <div class="carrossel-controles">
+    <button type="button" data-carrossel-anterior aria-label="Imagem anterior">←</button>
+    <button type="button" data-carrossel-pausa>Pausar</button>
+    <button type="button" data-carrossel-proxima aria-label="Próxima imagem">→</button>
+  </div>
+</div>
       </div>
     </section>
 

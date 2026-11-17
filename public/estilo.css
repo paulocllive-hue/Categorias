@@ -58,6 +58,78 @@ h1 em { color: var(--laranja); font-weight: inherit; }
 .botao-claro { margin-top: 28px; background: #ffbd80; color: #341613; }
 .botao-claro:hover { background: #ffd3ab; }
 .segmentos { margin-top: 22px; color: #f1d8c5; font-size: 13px; }
+
+.carrossel-vitrine {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding-block: 24px;
+}
+
+.carrossel-fotos {
+  width: min(100%, 380px);
+  height: clamp(240px, 36vw, 390px);
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.carrossel-fotos img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.carrossel-controles {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+.carrossel-controles button {
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 1px solid #e7dbce;
+  border-radius: 6px;
+  background: #fffaf3;
+  color: #271c17;
+}
+
+.vitrine.carrossel-vitrine::before {
+  content: none;
+}
+
+.vitrine.carrossel-vitrine {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding-block: 24px;
+}
+
+.carrossel-vitrine .carrossel-fotos {
+  width: 90%;
+  max-width: 540px;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #f1e3d4;
+}
+
+.carrossel-vitrine .carrossel-fotos img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.carrossel-vitrine .carrossel-fotos img[hidden] {
+  display: none;
+}
+
 .vitrine { position: relative; min-height: 480px; }
 .vitrine::before { position: absolute; inset: 10% 5%; content: ""; border: 1px solid #e7a67d52; border-radius: 50%; transform: rotate(-14deg); }
 .vitrine img { width: 100%; height: 100%; object-fit: contain; }

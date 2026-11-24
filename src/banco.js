@@ -43,6 +43,20 @@ export function abrirBanco(dataDir, catalogo, site) {
   try {
     db.exec(readFileSync(schemaPath, 'utf8'));
     transacao(db, () => {
+      const colunas = new Set(db.prepare('PRAGMA table_info(contas)').all().map((coluna) => coluna.name));
+      if (!colunas.has('receber_promocoes')) {
+        db.exec('ALTER TABLE contas ADD COLUMN receber_promocoes INTEGER NOT NULL DEFAULT 0 CHECK (receber_promocoes IN (0, 1))');
+      }
+      if (!colunas.has('promocoes_atualizado_em')) {
+        db.exec('ALTER TABLE contas ADD COLUMN promocoes_atualizado_em TEXT');
+      }
+      const colunasPedido = new Set(db.prepare('PRAGMA table_info(pedidos)').all().map((coluna) => coluna.name));
+      for (const [nome, tipo] of Object.entries({
+        email_ultimo_erro: 'TEXT', email_bloqueio_token: 'TEXT',
+        email_bloqueio_ate: 'INTEGER NOT NULL DEFAULT 0'
+      })) {
+        if (!colunasPedido.has(nome)) db.exec('ALTER TABLE pedidos ADD COLUMN ' + nome + ' ' + tipo);
+      }
       // Um item retirado do arquivo fica inativo. Pedidos anteriores mantêm os dados gravados.
       db.exec('UPDATE marcas SET ativo = 0; UPDATE produtos SET ativo = 0');
       const gravarMarca = db.prepare(`INSERT INTO marcas (id, nome, ordem, ativo) VALUES (?, ?, ?, 1)
@@ -73,6 +87,12 @@ export function abrirBanco(dataDir, catalogo, site) {
 }
 
 export function consultarProdutos(db, perfil) {
+  if (!perfil) {
+    return db.prepare(`SELECT p.id, p.marca_id AS marca, p.nome, p.apresentacao, p.venda,
+      p.imagem, p.fonte_preco, NULL AS preco_centavos FROM produtos p
+      JOIN marcas m ON m.id = p.marca_id AND m.ativo = 1
+      WHERE p.ativo = 1 ORDER BY m.ordem, p.ordem`).all().map((produto) => ({ ...produto, disponivel: true }));
+  }
   const registros = db.prepare(`SELECT p.id, p.marca_id AS marca, p.nome, p.apresentacao, p.venda,
     p.imagem, p.fonte_preco, t.preco_centavos FROM produtos p
     JOIN marcas m ON m.id = p.marca_id AND m.ativo = 1

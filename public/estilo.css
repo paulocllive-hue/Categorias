@@ -165,3 +165,27 @@ legend { font-weight: 750; }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto; }
 }
+
+/* Entrada, preferências e pedidos da conta. */
+.botao-secundario { background: var(--cor-superficie); color: var(--cor-texto); border-color: var(--cor-borda); }
+.botao-secundario:hover { background: var(--cor-aviso); color: var(--cor-texto); }
+.acesso-acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 24px 10px; }
+.formulario .opcao-promocoes { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+.formulario .opcao-promocoes input { width: 20px; height: 20px; min-height: 0; margin: 3px 0 0; flex-shrink: 0; }
+.preferencias { margin-block: 24px 12px; }
+.preferencias .botao { justify-self: start; }
+.pedidos-lista { display: grid; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.pedido-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px; border: 1px solid var(--cor-borda); border-radius: 8px; }
+.pedido-card p { color: var(--cor-secundaria); }
+.marca-rodape { align-items: center; flex-wrap: wrap; gap: 16px; }
+.marca-rodape > p { margin-right: auto; font-size: 14px; color: var(--cor-secundaria); }
+@media (max-width: 1200px) {
+  .barra { flex-wrap: wrap; }
+  .barra > nav { order: 3; width: 100%; padding-block: 8px; justify-content: center; border-top: 1px solid var(--cor-borda); }
+}
+@media (max-width: 700px) {
+  .barra .acoes { flex: 1; justify-content: flex-end; gap: 8px 14px; }
+  .barra .acao-conta { font-size: 13px; }
+  .acesso-acoes > .botao { width: 100%; }
+}
+.cep-status { margin-top: 12px; color: var(--cor-secundaria); font-size: 13px; }

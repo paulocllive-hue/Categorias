@@ -1,6 +1,6 @@
 {
   "name": "msc-representacoes",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,6 +10,12 @@
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --env-file-if-exists=.env --watch src/server.js",
     "test": "node --test",
-    "preparar-testes": "node --env-file-if-exists=.env scripts/preparar-testes.js"
+    "preparar-testes": "node --env-file-if-exists=.env scripts/preparar-testes.js",
+    "testar-email": "node --env-file-if-exists=.env scripts/testar-email.js",
+    "reenviar-pedidos": "node --env-file-if-exists=.env scripts/reenviar-pedidos.js"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "nodemailer": "10.6.1"
   }
 }

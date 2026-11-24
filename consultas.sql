@@ -2,7 +2,8 @@
 -- As tabelas comerciais são atualizadas de src/catalogo.json ao iniciar o servidor.
 
 -- 1. Perfis comerciais de cada conta, sem hashes de senha ou tokens.
-SELECT id, razao_social, email, cnpj, perfil FROM contas ORDER BY id;
+SELECT id, razao_social, email, cnpj, perfil, receber_promocoes, promocoes_atualizado_em
+FROM contas ORDER BY id;
 
 -- 2. Tabela Kamai completa. Os valores são guardados em centavos.
 SELECT p.id, p.nome, p.apresentacao, p.venda, t.perfil,

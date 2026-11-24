@@ -8,6 +8,8 @@ import { parseArgs } from 'node:util';
 import { abrirBanco, consultarProdutos, transacao } from './banco.js';
 import { confereSenha, criarToken, ErroHttp, hashSenha, hashToken, validarCadastro } from './contas.js';
 import { criarFilaEmail } from './email.js';
+import { configuracaoEmail, validarEmail } from './config-email.js';
+import { consultarCep } from './cep.js';
 
 const raiz = fileURLToPath(new URL('../', import.meta.url));
 const diasDeSessao = 7;
@@ -40,7 +42,10 @@ async function lerJson(req) {
 
 function contaPublica(conta) {
   const { id, nome, razao_social, cnpj, email, perfil, endereco_json } = conta;
-  return { id, nome, razao_social, cnpj, email, perfil, endereco: JSON.parse(endereco_json) };
+  return {
+    id, nome, razao_social, cnpj, email, perfil, endereco: JSON.parse(endereco_json),
+    receber_promocoes: conta.receber_promocoes === 1
+  };
 }
 
 export function criarAplicacao(opcoes = {}) {
@@ -48,19 +53,14 @@ export function criarAplicacao(opcoes = {}) {
     dataDir: resolve(raiz, process.env.DATA_DIR || 'data'),
     catalogPath: resolve(raiz, process.env.CATALOG_FILE || 'src/catalogo.json'),
     sitePath: resolve(raiz, process.env.SITE_FILE || 'src/site.json'),
-    emailMode: process.env.EMAIL_MODE || 'file',
-    emailKey: process.env.RESEND_API_KEY,
-    emailFrom: process.env.ORDER_EMAIL_FROM,
-    emailTo: process.env.ORDER_EMAIL_TO,
+    ...configuracaoEmail(),
     secure: process.env.SECURE_COOKIES === 'true',
     ...opcoes
   };
   const catalogo = JSON.parse(readFileSync(config.catalogPath, 'utf8'));
   const site = JSON.parse(readFileSync(config.sitePath, 'utf8'));
-  if (!['file', 'resend'].includes(config.emailMode) ||
-    (config.emailMode === 'resend' && (!config.emailKey || !config.emailFrom || !config.emailTo))) {
-    throw new Error('Para envio real, preencha a chave e os endereços de e-mail.');
-  }
+  validarEmail(config);
+  config.representante = site.representante.nome;
 
   const db = abrirBanco(config.dataDir, catalogo, site);
   const filaEmail = criarFilaEmail(db, config);
@@ -96,6 +96,7 @@ export function criarAplicacao(opcoes = {}) {
     const segundos = diasDeSessao * 86400;
     db.prepare('INSERT INTO sessoes VALUES (?, ?, ?)').run(hashToken(token), id, Date.now() + segundos * 1000);
     cookie(res, token, segundos);
+    return Date.now() + segundos * 1000;
   }
 
   function carrinho(conta) {
@@ -124,8 +125,8 @@ export function criarAplicacao(opcoes = {}) {
         const c = validarCadastro(dados);
         const senha = await hashSenha(c.senha);
         try {
-          const r = db.prepare('INSERT INTO contas (nome, razao_social, cnpj, email, senha_hash, perfil, endereco_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(c.nome, c.razao_social, c.cnpj, c.email, senha, c.perfil, JSON.stringify(c.endereco));
+          const r = db.prepare('INSERT INTO contas (nome, razao_social, cnpj, email, senha_hash, perfil, endereco_json, receber_promocoes, promocoes_atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(c.nome, c.razao_social, c.cnpj, c.email, senha, c.perfil, JSON.stringify(c.endereco), c.receber_promocoes ? 1 : 0, new Date().toISOString());
           conta = db.prepare('SELECT * FROM contas WHERE id = ?').get(r.lastInsertRowid);
         } catch (erro) {
           if (erro.errcode !== 2067) throw erro;
@@ -140,27 +141,32 @@ export function criarAplicacao(opcoes = {}) {
         }
       }
       if (tokenHash) db.prepare('DELETE FROM sessoes WHERE token_hash = ?').run(tokenHash);
-      iniciarSessao(res, conta.id);
-      json(res, caminho === '/api/cadastro' ? 201 : 200, { conta: contaPublica(conta) });
+      const expira_em = iniciarSessao(res, conta.id);
+      json(res, caminho === '/api/cadastro' ? 201 : 200, { conta: contaPublica(conta), expira_em });
     } finally {
       autenticacoesAtivas--;
     }
   }
 
-  async function api(req, res, caminho) {
+  async function api(req, res, caminho, parametros) {
+    if (req.method === 'GET' && caminho.startsWith('/api/cep/')) {
+      return json(res, 200, await consultarCep(caminho.slice('/api/cep/'.length), config.cepFetch));
+    }
     const token = (req.headers.cookie || '').split(';').map((parte) => parte.trim()).find((parte) => parte.startsWith(nomeCookie + '='))?.split('=')[1];
     const tokenHash = /^[0-9a-f]{64}$/.test(token || '') ? hashToken(token) : null;
-    const conta = tokenHash && db.prepare('SELECT c.* FROM sessoes s JOIN contas c ON c.id = s.conta_id WHERE s.token_hash = ? AND s.expira_em > ?').get(tokenHash, Date.now());
+    const conta = tokenHash && db.prepare('SELECT c.*, s.expira_em FROM sessoes s JOIN contas c ON c.id = s.conta_id WHERE s.token_hash = ? AND s.expira_em > ?').get(tokenHash, Date.now());
     const rota = req.method + ' ' + caminho;
 
     switch (rota) {
       case 'GET /api/sessao':
-        return json(res, 200, { conta: conta ? contaPublica(conta) : null });
+        return json(res, 200, { conta: conta ? contaPublica(conta) : null, expira_em: conta ? conta.expira_em : null });
       case 'GET /api/site':
         return json(res, 200, site);
       case 'GET /api/catalogo':
         return json(res, 200, {
           demonstracao: catalogo.demonstracao,
+          conta_id: conta ? conta.id : null,
+          perfil: conta ? conta.perfil : null,
           produtos: consultarProdutos(db, conta?.perfil)
         });
       case 'POST /api/cadastro':
@@ -174,7 +180,23 @@ export function criarAplicacao(opcoes = {}) {
     }
 
     if (!conta) throw new ErroHttp(401, 'Entre na sua conta para continuar.');
+    const detalhePedido = req.method === 'GET' && /^\/api\/pedidos\/([1-9][0-9]*)$/.exec(caminho);
+    if (detalhePedido) {
+      const pedido = db.prepare('SELECT id, criado_em, total_centavos, cliente_json FROM pedidos WHERE id = ? AND conta_id = ?')
+        .get(detalhePedido[1], conta.id);
+      if (!pedido) throw new ErroHttp(404, 'Pedido não encontrado.');
+      const itens = db.prepare('SELECT produto_id, nome, apresentacao, venda, quantidade, preco_centavos FROM itens_pedido WHERE pedido_id = ? ORDER BY produto_id').all(pedido.id);
+      const { cliente_json, ...resumo } = pedido;
+      return json(res, 200, { pedido: { ...resumo, cliente: JSON.parse(cliente_json), itens } });
+    }
     switch (rota) {
+      case 'PATCH /api/conta/promocoes': {
+        const { receber_promocoes } = await lerJson(req);
+        if (typeof receber_promocoes !== 'boolean') throw new ErroHttp(400, 'Informe sua preferência de promoções.');
+        db.prepare('UPDATE contas SET receber_promocoes = ?, promocoes_atualizado_em = ? WHERE id = ?')
+          .run(receber_promocoes ? 1 : 0, new Date().toISOString(), conta.id);
+        return json(res, 200, { receber_promocoes });
+      }
       case 'GET /api/carrinho':
         return json(res, 200, estadoCarrinho(conta));
       case 'PUT /api/carrinho': {
@@ -203,8 +225,14 @@ export function criarAplicacao(opcoes = {}) {
         return json(res, 200, estadoCarrinho(conta));
       }
       case 'GET /api/pedidos': {
-        const pedidos = db.prepare('SELECT id, criado_em, total_centavos FROM pedidos WHERE conta_id = ? ORDER BY id DESC LIMIT 50').all(conta.id);
-        return json(res, 200, { pedidos });
+        const antes = parametros.get('antes');
+        if (antes !== null && !/^[1-9][0-9]{0,14}$/.test(antes)) {
+          throw new ErroHttp(400, 'Página de pedidos inválida.');
+        }
+        const registros = db.prepare(`SELECT id, criado_em, total_centavos FROM pedidos
+          WHERE conta_id = ? AND id < ? ORDER BY id DESC LIMIT 21`).all(conta.id, antes ?? Number.MAX_SAFE_INTEGER);
+        const pedidos = registros.slice(0, 20);
+        return json(res, 200, { pedidos, proxima_pagina: registros.length > 20 ? pedidos.at(-1).id : null });
       }
       case 'POST /api/pedidos': {
         const { chave, versao } = await lerJson(req);
@@ -239,10 +267,11 @@ export function criarAplicacao(opcoes = {}) {
     res.setHeader('Referrer-Policy', 'same-origin');
     res.setHeader('Content-Security-Policy', "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     try {
-      const caminho = new URL(req.url, 'http://localhost').pathname;
+      const url = new URL(req.url, 'http://localhost');
+      const caminho = url.pathname;
       if (caminho.startsWith('/api/')) {
         if (req.headers['sec-fetch-site'] === 'cross-site') throw new ErroHttp(403, 'Origem não permitida.');
-        return await api(req, res, caminho);
+        return await api(req, res, caminho, url.searchParams);
       }
       if (!['GET', 'HEAD'].includes(req.method)) throw new ErroHttp(405, 'Método inválido.');
       const publico = caminho === '/' ? '/index.html' : caminho;
@@ -262,6 +291,7 @@ export function criarAplicacao(opcoes = {}) {
   });
   server.requestTimeout = 20_000;
   server.on('close', () => clearInterval(ciclo));
+  server.once('listening', () => { void filaSeguro(); });
   return { server, db, filaEmail };
 }
 

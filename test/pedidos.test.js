@@ -62,14 +62,20 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     assert.equal((await fetch(base + '/data/msc.sqlite')).status, 404);
     const publico = await chamar('catalogo');
     assert.ok(publico.dados.produtos.every((item) => item.preco_centavos === null && !('precos' in item)));
+    assert.equal(publico.dados.conta_id, null);
+    assert.equal(publico.dados.perfil, null);
+    assert.ok((await chamar('catalogo?perfil=distribuidor')).dados.produtos.every((p) => p.preco_centavos === null));
+    assert.equal((await chamar('pedidos')).status, 401);
     assert.equal((await chamar('carrinho')).status, 401);
     assert.equal((await chamar('cadastro', 'POST', { ...cadastro(0), cnpj: '12.345.678/0001-00' })).status, 400);
 
     const contas = [];
     for (const [i, esperado] of [7200, 6880, 8500].entries()) {
-      const conta = await chamar('cadastro', 'POST', cadastro(i));
+      const conta = await chamar('cadastro', 'POST', { ...cadastro(i), receber_promocoes: i === 1 });
       assert.equal(conta.status, 201, JSON.stringify(conta.dados));
       contas.push(conta.cookie);
+      assert.equal(conta.dados.conta.receber_promocoes, i === 1);
+      assert.ok(conta.dados.expira_em > Date.now());
       const catalogo = await chamar('catalogo', 'GET', undefined, conta.cookie);
       assert.equal(catalogo.dados.produtos[0].preco_centavos, esperado);
       const kamai = catalogo.dados.produtos.filter((item) => item.marca === 'kamai' && item.disponivel);
@@ -100,12 +106,21 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     assert.equal((await chamar('cadastro', 'POST', cadastro(0))).status, 409);
     assert.equal((await chamar('login', 'POST', { email: cadastro(0).email, senha: 'outra' })).status, 401);
 
+    const preferencia = await chamar('conta/promocoes', 'PATCH', { receber_promocoes: true }, varejo);
+    assert.equal(preferencia.status, 200);
+    assert.equal((await chamar('sessao', 'GET', undefined, varejo)).dados.conta.receber_promocoes, true);
+    assert.equal((await chamar('conta/promocoes', 'PATCH', { receber_promocoes: 'sim' }, varejo)).status, 400);
+    await chamar('conta/promocoes', 'PATCH', { receber_promocoes: false }, varejo);
+
     const item = { id: 'kamai-gin', acao: 'adicionar', preco_centavos: 1, perfil: 'distribuidor' };
     const primeiro = await chamar('carrinho', 'PUT', item, varejo);
     assert.equal(primeiro.dados.itens[0].preco_centavos, 7200);
     assert.deepEqual((await chamar('carrinho', 'GET', undefined, atacado)).dados.itens, []);
     await chamar('logout', 'POST', {}, varejo);
     assert.equal((await chamar('carrinho', 'GET', undefined, varejo)).status, 401);
+    const anonimoAposSair = await chamar('catalogo', 'GET', undefined, varejo);
+    assert.ok(anonimoAposSair.dados.produtos.every((p) => p.preco_centavos === null));
+    assert.equal((await chamar('pedidos', 'GET', undefined, varejo)).status, 401);
 
     await parar();
     await iniciar();
@@ -129,6 +144,15 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     assert.deepEqual((await chamar('carrinho', 'GET', undefined, sessao)).dados.itens, []);
     assert.equal((await chamar('pedidos', 'GET', undefined, sessao)).dados.pedidos.length, 1);
     assert.equal((await chamar('pedidos', 'GET', undefined, atacado)).dados.pedidos.length, 0);
+    const detalhe = await chamar('pedidos/' + pedido.dados.pedido.id, 'GET', undefined, sessao);
+    assert.equal(detalhe.status, 200);
+    assert.equal(detalhe.dados.pedido.itens[0].quantidade, 3);
+    assert.equal(detalhe.dados.pedido.cliente.email, cadastro(0).email);
+    assert.ok(!('senha_hash' in detalhe.dados.pedido.cliente));
+    assert.equal((await chamar('pedidos/' + pedido.dados.pedido.id, 'GET', undefined, atacado)).status, 404);
+    assert.equal((await chamar('pedidos/' + pedido.dados.pedido.id)).status, 401);
+    assert.equal((await chamar('pedidos?antes=1', 'GET', undefined, sessao)).dados.pedidos.length, 0);
+    assert.equal((await chamar('pedidos?antes=invalido', 'GET', undefined, sessao)).status, 400);
     for (let i = 0; i < 50; i++) {
       if (app.db.prepare('SELECT email_status FROM pedidos').get().email_status === 'simulado') break;
       await esperar(20);
@@ -137,6 +161,11 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     assert.match(email, /Pedido #1/);
     assert.match(email, /3 × Kamai Gin Sunset/);
     assert.match(email, /216,00/);
+    app.db.prepare('UPDATE sessoes SET expira_em = 0').run();
+    assert.equal((await chamar('sessao', 'GET', undefined, sessao)).dados.conta, null);
+    assert.ok((await chamar('catalogo', 'GET', undefined, sessao)).dados.produtos.every((p) => p.preco_centavos === null));
+    assert.equal((await chamar('pedidos', 'GET', undefined, sessao)).status, 401);
+    assert.equal((await chamar('carrinho', 'GET', undefined, sessao)).status, 401);
   } finally {
     await parar();
     await rm(dataDir, { recursive: true, force: true });

@@ -24,6 +24,9 @@
       <div class="acoes">
         <span id="perfil-atual" class="perfil-atual" hidden></span>
         <button type="button" class="acao-conta" id="conta">Entrar</button>
+        <button type="button" class="acao-conta" id="cadastrar">Cadastrar</button>
+        <button type="button" class="acao-conta" id="meus-pedidos" hidden>Meus pedidos</button>
+        <button type="button" class="acao-conta" id="sair" hidden>Sair</button>
         <button type="button" class="botao botao-carrinho" id="carrinho">Carrinho <span id="quantidade">0</span></button>
       </div>
     </div>
@@ -108,7 +111,7 @@
       <fieldset>
         <legend>Endereço de entrega</legend>
         <div class="campos-endereco">
-          <label>CEP<input name="cep" autocomplete="postal-code" inputmode="numeric" required maxlength="9"></label>
+          <label>CEP<input name="cep" aria-describedby="cep-status" autocomplete="postal-code" inputmode="numeric" required maxlength="9"></label>
           <label>UF<input name="uf" autocomplete="address-level1" required minlength="2" maxlength="2" autocapitalize="characters"></label>
           <label class="campo-largo">Logradouro<input name="logradouro" autocomplete="address-line1" required maxlength="150"></label>
           <label>Número<input name="numero" required maxlength="20"></label>
@@ -116,7 +119,12 @@
           <label>Bairro<input name="bairro" autocomplete="address-level3" required maxlength="80"></label>
           <label>Cidade<input name="cidade" autocomplete="address-level2" required maxlength="80"></label>
         </div>
+        <p id="cep-status" class="cep-status" role="status">Informe o CEP para buscar o endereço. Confira o número e o complemento.</p>
       </fieldset>
+      <label class="opcao-promocoes">
+        <input type="checkbox" name="receber_promocoes">
+        <span>Quero receber promoções por e-mail.</span>
+      </label>
       <button class="botao botao-pedido" type="submit">Criar conta</button>
       <button class="link" data-acao="login" type="button">Já tenho uma conta</button>
     </form>

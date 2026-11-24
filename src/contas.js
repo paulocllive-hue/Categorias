@@ -57,6 +57,9 @@ export function validarCadastro(dados) {
     throw new ErroHttp(400, 'A senha deve ter entre 10 e 128 caracteres.');
   }
 
+  if (dados.receber_promocoes !== undefined && typeof dados.receber_promocoes !== 'boolean') {
+    throw new ErroHttp(400, 'Confira sua preferência de receber promoções.');
+  }
   const endereco = dados.endereco ?? {};
   const cep = texto(endereco.cep, 8, 9, 'CEP').replace('-', '');
   const uf = texto(endereco.uf, 2, 2, 'UF').toUpperCase();
@@ -69,6 +72,7 @@ export function validarCadastro(dados) {
     nome: texto(dados.nome, 2, 100, 'nome do responsável'),
     razao_social: texto(dados.razao_social, 2, 150, 'razão social'),
     email, cnpj, perfil: dados.perfil, senha: dados.senha,
+    receber_promocoes: dados.receber_promocoes === true,
     endereco: {
       cep, uf,
       logradouro: texto(endereco.logradouro, 2, 150, 'logradouro'),

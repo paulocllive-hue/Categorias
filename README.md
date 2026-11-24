@@ -1,8 +1,44 @@
 # A14 Representações
 
-Versão 1.1 do catálogo de pedidos para compradores de empresas com CNPJ. A página segue a estrutura enviada no desenho, com cabeçalho compacto, banner de destaques, logos em círculos, uma seção horizontal por marca e rodapé para contato e pontos de venda. Os produtos e as seções crescem conforme o cadastro do catálogo.
+Versão 1.4 do catálogo de pedidos para compradores de empresas com CNPJ. A página segue a estrutura enviada no desenho, com cabeçalho compacto, banner de destaques, logos em círculos, uma seção horizontal por marca e rodapé para contato e pontos de venda. Os produtos e as seções crescem conforme o cadastro do catálogo.
 
 O primeiro fluxo a testar é entrar com um perfil comercial, ver o preço Kamai correspondente, adicionar produtos e confirmar o pedido. A página usa HTML, CSS e JavaScript. O Node.js recebe o cadastro e os pedidos, e o SQLite guarda os dados no próprio projeto.
+
+## CEP e envio dos pedidos
+
+O cadastro agora busca o endereço pelo CEP. O e-mail do pedido inclui resumo HTML e planilha Excel com os dados da empresa, o endereço completo, os itens e o total. O guia ALTERACOES_CEP_EMAIL.md explica quais arquivos substituir, como configurar seu .env e como repetir os testes.
+
+Execute npm install após atualizar os arquivos. Em seguida, use npm run testar-email para gerar uma prévia ou enviá-la pela configuração SMTP ou Resend. O modo padrão file gera HTML, TXT, XLSX e EML em data/emails.
+
+## Recuperação de notificações
+
+O guia REENVIO_PEDIDOS.md explica a configuração sem linhas duplicadas, o envio pelo Gmail e a recuperação de pedidos. Execute npm run reenviar-pedidos -- --listar para consultar os estados. Com SMTP ou Resend configurado, use --pendentes para tentar as notificações pendentes e com falha, ou --pedido 2 para selecionar uma notificação, inclusive simulada. O comando preserva pedidos já aceitos pelo provedor. A fila também é retomada quando o servidor inicia e utiliza uma reserva no banco para evitar envios simultâneos.
+
+## Acesso, preços e área da conta
+
+Os preços aparecem após entrar com uma conta, conforme o perfil salvo no banco. A API pública retorna os produtos com preco_centavos=null. O servidor consulta os preços do perfil somente quando a sessão é válida. Ao sair ou quando a sessão expira, a página remove os valores apresentados e os dados da conta.
+
+Ao abrir o site sem sessão, um popup convida a pessoa a criar cadastro ou entrar. Ele aparece uma vez por aba, durante a sessão de navegação. O visitante também pode continuar consultando as marcas. Ao clicar em Fazer pedido sem entrar, as opções de cadastro e login aparecem novamente. Depois do acesso, o sistema retorna à marca escolhida.
+
+O menu de visitante tem Entrar e Cadastrar. Quem está conectado vê Minha conta, Meus pedidos e Sair. A tela Meus pedidos lista os registros da própria conta, com número, data e total, e permite abrir os itens e o endereço gravados. O botão Carregar mais pedidos aparece quando existem mais de 20 registros.
+
+O checkbox “Quero receber promoções por e-mail” é opcional e começa desmarcado. O banco salva a preferência em receber_promocoes e registra a data em promocoes_atualizado_em. A pessoa pode alterar a opção em Minha conta. O envio de campanhas dependerá da ferramenta comercial configurada para utilizar essa lista de interessados.
+
+O carrinho é salvo na tabela carrinho por conta_id e produto_id a cada alteração. Sair encerra a sessão, e a próxima entrada na mesma conta recupera os produtos. Ao confirmar o pedido, o servidor grava os itens na tabela itens_pedido e esvazia o carrinho dessa conta.
+
+### Teste o novo acesso
+
+1. Abra o site em uma janela privativa. Confira o convite inicial e escolha Continuar visitando.
+2. Confira que os cards mostram produtos e apresentações, com a mensagem para entrar ou se cadastrar. Os valores devem ficar ausentes.
+3. Clique em Fazer pedido da Kamai. Escolha Já tenho conta para entrar com uma das contas de teste, ou Criar cadastro para uma nova empresa.
+4. Ao entrar, confira os preços do perfil e o menu com Minha conta, Meus pedidos e Sair.
+5. Adicione produtos, clique em Sair no menu e confira que os valores são removidos da página.
+6. Entre novamente com a mesma conta e abra o carrinho. Os itens devem reaparecer com os preços do perfil.
+7. Confirme um pedido e use Meus pedidos no menu. Abra Ver detalhes para consultar os itens e o endereço.
+8. Saia e entre com outra conta. Ela deve mostrar seus próprios pedidos e carrinho.
+9. Em Minha conta, altere a opção de promoções, salve e confira o campo com a primeira consulta de consultas.sql.
+
+A atualização do banco é automática. Contas de versões anteriores recebem os novos campos de promoções com o valor inicial 0. Guarde seu .env e a pasta data para continuar usando suas contas, carrinhos e pedidos.
 
 ## 1. Abra a versão nova
 
@@ -20,9 +56,10 @@ node -v
 Copy-Item .env.example .env
 ```
 
-5. Prepare as três contas fictícias.
+5. Instale as dependências e prepare as três contas fictícias.
 
 ```powershell
+npm install
 npm run preparar-testes
 ```
 
@@ -34,7 +71,7 @@ npm start
 
 7. Acesse http://127.0.0.1:3000. Mantenha o terminal aberto durante os testes. O comando npm run dev reinicia o servidor ao editar o JavaScript do backend. Para mudanças nos arquivos JSON, pare e inicie de novo. Para HTML, CSS e JavaScript do navegador, salve e atualize a página com Ctrl+F5.
 
-As dependências desta versão vêm com o Node.js 24. O banco e suas tabelas são criados automaticamente na primeira execução. A versão utiliza a API SQLite do Node 24, que pode exibir um aviso experimental.
+Esta versão utiliza Node.js 24 e as dependências Nodemailer e ExcelJS. Execute npm install na pasta do projeto antes de iniciar. O banco e suas tabelas são criados automaticamente na primeira execução. A versão utiliza a API SQLite do Node 24, que pode exibir um aviso experimental.
 
 O catálogo desta versão consulta a API para montar as seções. Use a porta do Node para abrir o projeto completo. O Live Server na porta 5500 não fornece esses endpoints.
 
@@ -111,7 +148,7 @@ O modo resend está implementado no backend. Para envio real, configure RESEND_A
 npm test
 ```
 
-Os dois testes usam bancos temporários próprios. A migração verifica que contas e carrinhos anteriores continuam presentes e que os preços históricos dos pedidos são mantidos. Eles verificam os três perfis, os valores Kamai, as caixas de seis unidades, a exclusividade de 1,5 L, a proteção contra preço ou perfil enviados pelo navegador, cadastro, logout, persistência do carrinho, concorrência, pedido repetido e mensagem de e-mail em arquivo.
+A suíte contém onze testes e utiliza bancos temporários próprios e um servidor SMTP local de teste. Eles incluem sessão expirada, catálogo sem valores para visitantes, gravação da preferência de promoções e isolamento dos detalhes de pedidos entre contas. A migração verifica que contas e carrinhos anteriores continuam presentes e que os preços históricos dos pedidos são mantidos. Eles verificam os três perfis, os valores Kamai, as caixas de seis unidades, a exclusividade de 1,5 L, a proteção contra preço ou perfil enviados pelo navegador, cadastro, logout, persistência do carrinho, concorrência, pedido repetido e mensagem de e-mail em arquivo.
 
 ## 5. Edite o layout e o conteúdo
 
@@ -186,7 +223,7 @@ O arquivo SQLite fica em data/msc.sqlite. O Node executa schema.sql e importa si
 
 | Tabela | Dados guardados |
 | --- | --- |
-| contas | Responsável, empresa, CNPJ, e-mail, hash da senha, perfil e endereço |
+| contas | Responsável, empresa, CNPJ, e-mail, hash da senha, perfil, endereço e preferência de promoções |
 | sessoes | Hash do token de login, conta e vencimento |
 | marcas | Identificador da marca, nome, ordem e situação |
 | produtos | Marca, apresentação, unidade de venda, imagem e situação |
@@ -203,7 +240,7 @@ Você pode abrir msc.sqlite em um visualizador SQLite e usar as consultas do arq
 
 ## 9. Atualize sua pasta existente
 
-Para testar sem misturar os dados anteriores, prefira executar a nova pasta entregue. Se desejar atualizar o projeto antigo, pare o servidor, faça uma cópia completa da pasta e então copie public, src, scripts, test, package.json, README.md e consultas.sql da versão nova sobre os arquivos correspondentes.
+Para testar sem misturar os dados anteriores, prefira executar a nova pasta entregue. Se desejar atualizar o projeto antigo, pare o servidor, faça uma cópia completa da pasta e então copie public, src, scripts, test, package.json, package-lock.json, README.md, ALTERACOES_CEP_EMAIL.md e consultas.sql da versão nova sobre os arquivos correspondentes.
 
 Confira se o seu .env contém SITE_FILE=./src/site.json e se DATA_DIR aponta para a pasta de dados que você pretende usar. Mantenha o .env e a pasta data existentes para reaproveitar a base. A criação das novas tabelas é automática.
 
@@ -215,4 +252,4 @@ A base pessoal do ZIP recebido e os arquivos de configuração privada não são
 
 A página foi aberta no navegador para conferir o cabeçalho, banner, troca automática, pausa, logos alinhadas, cards e abertura do formulário pelo botão de pedido. As imagens carregaram, e a página desktop ficou dentro da largura disponível. O CSS inclui adaptação para telas menores. O fluxo autenticado, os valores e o registro do pedido foram conferidos pelos testes da API.
 
-Contatos comerciais e estabelecimentos aguardam os dados do representante. O e-mail foi exercitado no modo de arquivo local. O passo de envio real depende da conta Resend configurada por você.
+Contatos comerciais e estabelecimentos aguardam os dados do representante. O e-mail foi exercitado no modo de arquivo local. O envio à caixa de entrada depende da configuração SMTP ou Resend informada no guia ALTERACOES_CEP_EMAIL.md.

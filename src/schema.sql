@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS contas (
   email TEXT NOT NULL UNIQUE,
   senha_hash TEXT NOT NULL,
   perfil TEXT NOT NULL CHECK (perfil IN ('varejista','atacadista','distribuidor')),
-  endereco_json TEXT NOT NULL
+  endereco_json TEXT NOT NULL,
+  receber_promocoes INTEGER NOT NULL DEFAULT 0 CHECK (receber_promocoes IN (0, 1)),
+  promocoes_atualizado_em TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessoes (
@@ -35,6 +37,9 @@ CREATE TABLE IF NOT EXISTS pedidos (
   email_status TEXT NOT NULL DEFAULT 'pendente',
   email_tentativas INTEGER NOT NULL DEFAULT 0,
   email_proxima_tentativa INTEGER NOT NULL DEFAULT 0,
+  email_ultimo_erro TEXT,
+  email_bloqueio_token TEXT,
+  email_bloqueio_ate INTEGER NOT NULL DEFAULT 0,
   UNIQUE (conta_id, chave)
 );
 

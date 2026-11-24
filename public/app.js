@@ -7,6 +7,9 @@ const conteudo = document.querySelector('#conteudo');
 const botaoConta = document.querySelector('#conta');
 const botaoCarrinho = document.querySelector('#carrinho');
 const contador = document.querySelector('#quantidade');
+const botaoCadastro = document.querySelector('#cadastrar');
+const botaoPedidos = document.querySelector('#meus-pedidos');
+const botaoSair = document.querySelector('#sair');
 
 const marcas = {};
 let configuracaoSite = null;
@@ -23,12 +26,18 @@ let destino = null;
 let marcaAtual = '';
 let ocupado = false;
 let avisoTimer;
+let timerSessao;
+let revisaoSessao = 0;
+let sincronizacaoPendente = false;
+let produtosVitrine = [];
 const chaves = new Map();
 const brl = (centavos) => dinheiro.format(centavos / 100);
 
 async function api(caminho, metodo = 'GET', dados) {
+  const revisao = revisaoSessao;
   const resposta = await fetch('/api' + caminho, {
     method: metodo,
+    cache: 'no-store',
     headers: dados ? { 'Content-Type': 'application/json' } : {},
     body: dados ? JSON.stringify(dados) : undefined
   });
@@ -36,9 +45,13 @@ async function api(caminho, metodo = 'GET', dados) {
     throw new Error('Abra o site pela porta do servidor Node, normalmente http://127.0.0.1:3000.');
   }
   const resultado = await resposta.json();
+  if (revisao !== revisaoSessao && !['/login', '/cadastro', '/logout', '/sessao', '/site'].includes(caminho)) {
+    throw Object.assign(new Error('A sessão mudou. Entre novamente para continuar.'), { status: 401 });
+  }
   if (!resposta.ok) {
     const erro = new Error(resultado.erro);
     erro.status = resposta.status;
+    if (erro.status === 401 && caminho !== '/login') limparSessaoLocal();
     throw erro;
   }
   return resultado;
@@ -74,6 +87,9 @@ function avisar(texto) {
 
 function atualizarCabecalho() {
   botaoConta.textContent = conta ? 'Minha conta' : 'Entrar';
+  botaoCadastro.hidden = Boolean(conta);
+  botaoPedidos.hidden = !conta;
+  botaoSair.hidden = !conta;
   const perfilAtual = document.querySelector('#perfil-atual');
   perfilAtual.textContent = conta ? perfis[conta.perfil] : '';
   perfilAtual.hidden = !conta;
@@ -102,10 +118,71 @@ function mostrarFormulario(tipo) {
   conteudo.querySelector('input')?.focus({ preventScroll: true });
 }
 
+function mostrarAcesso(convite = false) {
+  abrir('acesso', convite ? 'Veja os preços para sua empresa' : 'Entre para fazer seu pedido');
+  conteudo.append(criar('p', 'Cadastre sua empresa ou entre para consultar os preços do seu segmento e montar pedidos. No cadastro, você também pode escolher receber promoções por e-mail.'));
+  const acoes = criar('div', '', 'acesso-acoes');
+  acoes.append(botao('Criar cadastro', 'cadastro'), botao('Já tenho conta · Entrar', 'login', 'botao botao-secundario'));
+  conteudo.append(acoes, botao('Continuar visitando', 'continuar-visitante', 'link'));
+}
+
 function pedirLogin(proximaTela) {
   destino = proximaTela;
-  mostrarFormulario('login');
-  status('Entre ou cadastre sua empresa para ver os preços e fazer pedidos.');
+  mostrarAcesso();
+}
+
+function aplicarSessao(sessao) {
+  clearTimeout(timerSessao);
+  conta = sessao.conta;
+  revisaoSessao++;
+  if (conta && sessao.expira_em) {
+    timerSessao = setTimeout(() => {
+      limparSessaoLocal();
+      avisar('Sua sessão expirou. Entre novamente para consultar os preços e continuar.');
+    }, Math.max(0, sessao.expira_em - Date.now()));
+  }
+  atualizarCabecalho();
+}
+
+function limparSessaoLocal() {
+  clearTimeout(timerSessao);
+  conta = null;
+  revisaoSessao++;
+  itens = [];
+  versaoCarrinho = null;
+  destino = null;
+  chaves.clear();
+  produtosVitrine = produtosVitrine.map((produto) => ({ ...produto, preco_centavos: null }));
+  renderizarCatalogoVitrine();
+  atualizarCabecalho();
+  painel.close();
+  conteudo.replaceChildren();
+}
+
+function notificarSessao() {
+  try {
+    localStorage.setItem('a14-sessao-alterada', Date.now() + '-' + Math.random());
+  } catch {
+    // A navegação e a autenticação continuam funcionando com armazenamento bloqueado.
+  }
+}
+
+async function sincronizarSessao() {
+  const sessao = await api('/sessao');
+  const mudou = (conta?.id ?? null) !== (sessao.conta?.id ?? null) ||
+    (conta?.perfil ?? null) !== (sessao.conta?.perfil ?? null);
+  if (mudou) limparSessaoLocal();
+  aplicarSessao(sessao);
+  await carregarCatalogoVitrine();
+  if (conta) salvarEstadoCarrinho(await api('/carrinho'));
+  atualizarCabecalho();
+}
+
+function validarContaCatalogo(catalogo) {
+  if (catalogo.conta_id !== (conta?.id ?? null) || catalogo.perfil !== (conta?.perfil ?? null)) {
+    limparSessaoLocal();
+    throw Object.assign(new Error('Sua sessão mudou. Entre novamente para consultar os preços.'), { status: 401 });
+  }
 }
 
 function detalheProduto(produto, textoPreco) {
@@ -131,7 +208,9 @@ async function mostrarCatalogo(marca) {
   if (!conta) return pedirLogin('catalogo');
   abrir('catalogo', marcas[marca]);
   status('Carregando produtos…');
-  const { produtos, demonstracao: modoDemo } = await api('/catalogo');
+  const catalogo = await api('/catalogo');
+  validarContaCatalogo(catalogo);
+  const { produtos, demonstracao: modoDemo } = catalogo;
   demonstracao = modoDemo;
   status('');
   avisoDemonstracao();
@@ -230,17 +309,62 @@ async function mostrarConta() {
   if (!conta) return mostrarFormulario('login');
   abrir('conta', 'Minha conta');
   avisoDemonstracao();
-  const { pedidos } = await api('/pedidos');
-  conteudo.append(criar('strong', conta.razao_social), criar('p', conta.nome + ' · ' + perfis[conta.perfil]), criar('p', conta.email), criar('p', enderecoFormatado(conta.endereco)));
-  conteudo.append(criar('h3', 'Últimos pedidos', 'pedidos'));
-  if (pedidos.length) {
-    const lista = criar('ul', '', 'pedidos');
-    for (const p of pedidos) lista.append(criar('li', '#' + p.id + ' · ' + dataPedido.format(new Date(p.criado_em)) + ' · ' + brl(p.total_centavos)));
+  conteudo.append(criar('strong', conta.razao_social), criar('p', conta.nome + ' · ' + perfis[conta.perfil]),
+    criar('p', conta.email), criar('p', enderecoFormatado(conta.endereco)));
+  const form = criar('form', '', 'formulario preferencias');
+  form.dataset.form = 'promocoes';
+  const label = criar('label', '', 'opcao-promocoes');
+  const checkbox = criar('input');
+  checkbox.type = 'checkbox';
+  checkbox.name = 'receber_promocoes';
+  checkbox.checked = conta.receber_promocoes;
+  label.append(checkbox, criar('span', 'Quero receber promoções por e-mail.'));
+  const salvar = criar('button', 'Salvar preferência', 'botao');
+  salvar.type = 'submit';
+  form.append(label, salvar);
+  conteudo.append(form, botao('Meus pedidos', 'historico', 'link'), botao('Sair da conta', 'logout', 'link'));
+}
+
+async function mostrarMeusPedidos(antes) {
+  if (!conta) return pedirLogin('pedidos');
+  if (!antes) abrir('pedidos', 'Meus pedidos');
+  const resultado = await api('/pedidos' + (antes ? '?antes=' + antes : ''));
+  let lista = conteudo.querySelector('.pedidos-lista');
+  if (!lista) {
+    lista = criar('ul', '', 'pedidos-lista');
     conteudo.append(lista);
-  } else {
-    conteudo.append(criar('p', 'Você ainda não fez pedidos.'));
   }
-  conteudo.append(botao('Sair da conta', 'logout', 'link'));
+  if (!resultado.pedidos.length && !antes) {
+    conteudo.append(criar('p', 'Você ainda não fez pedidos.'), botao('Conhecer as marcas', 'marcas', 'link'));
+  }
+  for (const pedido of resultado.pedidos) {
+    const item = criar('li', '', 'pedido-card');
+    const resumo = criar('div');
+    resumo.append(criar('strong', 'Pedido #' + pedido.id), criar('p', dataPedido.format(new Date(pedido.criado_em)) + ' · ' + brl(pedido.total_centavos)));
+    const detalhes = botao('Ver detalhes', 'detalhe-pedido', 'botao botao-secundario');
+    detalhes.dataset.pedido = pedido.id;
+    item.append(resumo, detalhes);
+    lista.append(item);
+  }
+  conteudo.querySelector('[data-acao="mais-pedidos"]')?.remove();
+  if (resultado.proxima_pagina) {
+    const mais = botao('Carregar mais pedidos', 'mais-pedidos', 'link');
+    mais.dataset.antes = resultado.proxima_pagina;
+    conteudo.append(mais);
+  }
+}
+
+async function mostrarDetalhePedido(id) {
+  const { pedido } = await api('/pedidos/' + id);
+  abrir('detalhe-pedido', 'Pedido #' + pedido.id);
+  conteudo.append(criar('p', dataPedido.format(new Date(pedido.criado_em))), criar('strong', pedido.cliente.razao_social));
+  if (pedido.cliente.endereco) conteudo.append(criar('p', 'Entrega · ' + enderecoFormatado(pedido.cliente.endereco)));
+  for (const item of pedido.itens) {
+    conteudo.append(detalheProduto(item, item.quantidade + ' × ' + brl(item.preco_centavos) + ' · ' + brl(item.quantidade * item.preco_centavos)));
+  }
+  const rodape = criar('div', '', 'painel-rodape');
+  rodape.append(criar('strong', 'Total dos produtos · ' + brl(pedido.total_centavos)), botao('Voltar aos pedidos', 'historico', 'link'));
+  conteudo.append(rodape);
 }
 
 function salvarEstadoCarrinho(carrinho) {
@@ -264,6 +388,9 @@ function chavePedido() {
 const acoes = {
   login: () => mostrarFormulario('login'),
   cadastro: () => mostrarFormulario('cadastro'),
+  'continuar-visitante': () => { destino = null; painel.close(); },
+  'detalhe-pedido': (elemento) => mostrarDetalhePedido(elemento.dataset.pedido),
+  'mais-pedidos': (elemento) => mostrarMeusPedidos(elemento.dataset.antes),
   'ver-carrinho': mostrarCarrinho,
   marcas: () => {
     painel.close();
@@ -302,16 +429,16 @@ const acoes = {
     conteudo.append(criar('p', 'Pedido #' + pedido.id + ' · ' + brl(pedido.total_centavos)));
     conteudo.append(botao('Ver meus pedidos', 'historico', 'link'));
   },
-  historico: mostrarConta,
+  historico: () => mostrarMeusPedidos(),
   logout: async () => {
-    await api('/logout', 'POST', {});
-    conta = null;
-    itens = [];
-    destino = null;
-    atualizarCabecalho();
-    await carregarCatalogoVitrine();
-    painel.close();
+    try {
+      await api('/logout', 'POST', {});
+    } finally {
+      limparSessaoLocal();
+      notificarSessao();
+    }
     avisar('Você saiu. Seu carrinho continua salvo na conta.');
+    await carregarCatalogoVitrine();
   }
 };
 
@@ -323,10 +450,8 @@ async function executar(operacao, elemento) {
     await operacao();
   } catch (erro) {
     if (erro.status === 401 && !['login', 'cadastro'].includes(tela)) {
-      const proximaTela = tela === 'catalogo' ? 'catalogo' : 'carrinho';
-      conta = null;
-      itens = [];
-      atualizarCabecalho();
+      const proximaTela = ['catalogo', 'pedidos'].includes(tela) ? tela : 'carrinho';
+      limparSessaoLocal();
       pedirLogin(proximaTela);
     } else if (painel.open) {
       status(erro.message || 'Tente novamente.');
@@ -336,6 +461,10 @@ async function executar(operacao, elemento) {
   } finally {
     ocupado = false;
     if (elemento) elemento.disabled = false;
+    if (sincronizacaoPendente) {
+      sincronizacaoPendente = false;
+      void executar(sincronizarSessao);
+    }
   }
 }
 
@@ -343,7 +472,7 @@ const inicializacao = (async () => {
   const estado = document.querySelector('#estado-site');
   try {
     const [sessao, site] = await Promise.all([api('/sessao'), api('/site')]);
-    conta = sessao.conta;
+    aplicarSessao(sessao);
     configuracaoSite = site;
     for (const marca of site.marcas) marcas[marca.id] = marca.nome;
     montarApresentacao(site);
@@ -351,6 +480,16 @@ const inicializacao = (async () => {
     if (conta) salvarEstadoCarrinho(await api('/carrinho'));
     atualizarCabecalho();
     estado.hidden = true;
+    if (!conta) {
+      let mostrarConvite = true;
+      try {
+        mostrarConvite = !sessionStorage.getItem('a14-convite-visto');
+        sessionStorage.setItem('a14-convite-visto', '1');
+      } catch {
+        // O convite também funciona sem armazenamento de sessão.
+      }
+      if (mostrarConvite) mostrarAcesso(true);
+    }
   } catch (erro) {
     estado.textContent = erro.message || 'Não foi possível carregar o catálogo. Atualize a página.';
   }
@@ -361,6 +500,34 @@ botaoConta.addEventListener('click', () => executar(async () => {
   destino = null;
   await mostrarConta();
 }));
+botaoCadastro.addEventListener('click', () => executar(async () => {
+  await inicializacao;
+  destino = null;
+  mostrarFormulario('cadastro');
+}));
+botaoPedidos.addEventListener('click', () => executar(async () => {
+  await inicializacao;
+  await mostrarMeusPedidos();
+}));
+botaoSair.addEventListener('click', () => executar(acoes.logout));
+
+window.addEventListener('storage', (evento) => {
+  if (evento.key !== 'a14-sessao-alterada') return;
+  limparSessaoLocal();
+  if (ocupado) sincronizacaoPendente = true;
+  else void executar(sincronizarSessao);
+});
+window.addEventListener('pageshow', (evento) => {
+  if (!evento.persisted) return;
+  limparSessaoLocal();
+  void executar(sincronizarSessao);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (ocupado) sincronizacaoPendente = true;
+  else void executar(async () => { await inicializacao; await sincronizarSessao(); });
+});
+
 botaoCarrinho.addEventListener('click', () => executar(async () => {
   await inicializacao;
   await mostrarCarrinho();
@@ -388,7 +555,17 @@ conteudo.addEventListener('submit', (evento) => {
   evento.preventDefault();
   const form = evento.target;
   const dados = Object.fromEntries(new FormData(form));
+  const receberPromocoes = form.querySelector('[name="receber_promocoes"]')?.checked ?? false;
+  if (form.dataset.form === 'promocoes') {
+    void executar(async () => {
+      const resultado = await api('/conta/promocoes', 'PATCH', { receber_promocoes: receberPromocoes });
+      conta.receber_promocoes = resultado.receber_promocoes;
+      status('Preferência de promoções salva.');
+    }, form.querySelector('[type="submit"]'));
+    return;
+  }
   if (form.dataset.form === 'cadastro') {
+    dados.receber_promocoes = receberPromocoes;
     dados.endereco = {};
     for (const campo of ['cep', 'uf', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade']) {
       dados.endereco[campo] = dados[campo];
@@ -396,8 +573,9 @@ conteudo.addEventListener('submit', (evento) => {
     }
   }
   void executar(async () => {
-    const { conta: novaConta } = await api('/' + form.dataset.form, 'POST', dados);
-    conta = novaConta;
+    const sessao = await api('/' + form.dataset.form, 'POST', dados);
+    aplicarSessao(sessao);
+    notificarSessao();
     const proximaTela = destino;
     destino = null;
     salvarEstadoCarrinho(await api('/carrinho'));
@@ -405,6 +583,7 @@ conteudo.addEventListener('submit', (evento) => {
     await carregarCatalogoVitrine();
     if (proximaTela === 'catalogo') return mostrarCatalogo(marcaAtual);
     if (proximaTela === 'carrinho') return mostrarCarrinho();
+    if (proximaTela === 'pedidos') return mostrarMeusPedidos();
     return mostrarConta();
   }, form.querySelector('[type="submit"]'));
 });
@@ -508,8 +687,17 @@ function iniciarBanner() {
 
 async function carregarCatalogoVitrine() {
   if (!configuracaoSite) return;
+  const revisao = revisaoSessao;
   const catalogo = await api('/catalogo');
+  if (revisao !== revisaoSessao) return;
+  validarContaCatalogo(catalogo);
   demonstracao = catalogo.demonstracao;
+  produtosVitrine = catalogo.produtos;
+  renderizarCatalogoVitrine();
+}
+
+function renderizarCatalogoVitrine() {
+  if (!configuracaoSite) return;
   const secoes = document.querySelector('#secoes-marcas');
   secoes.replaceChildren();
   for (const marca of configuracaoSite.marcas) {
@@ -525,7 +713,7 @@ async function carregarCatalogoVitrine() {
     cabecalho.append(imagemLocal(marca.logo, ''), descricao);
 
     const grade = criar('div', '', 'produtos-grade');
-    const produtos = catalogo.produtos.filter((p) => p.marca === marca.id && p.disponivel);
+    const produtos = produtosVitrine.filter((p) => p.marca === marca.id && (!conta || p.disponivel));
     for (const produto of produtos) {
       const card = criar('article', '', 'produto-card');
       const foto = criar('div', '', 'produto-foto');
@@ -536,7 +724,7 @@ async function carregarCatalogoVitrine() {
       }
       const info = criar('div', '', 'produto-info');
       info.append(criar('h3', produto.nome), criar('p', produto.apresentacao + ' · ' + produto.venda));
-      if (produto.preco_centavos !== null) {
+      if (conta && produto.preco_centavos !== null) {
         info.append(criar('p', brl(produto.preco_centavos), 'produto-preco'));
         if (produto.fonte_preco === 'Preço ilustrativo de teste') info.append(criar('p', produto.fonte_preco));
       }
@@ -548,6 +736,7 @@ async function carregarCatalogoVitrine() {
     pedir.type = 'button';
     pedir.dataset.marca = marca.id;
     pedir.setAttribute('aria-label', 'Fazer pedido de ' + marca.nome);
+    if (!conta) rodape.append(criar('p', 'Entre ou cadastre-se para consultar os preços.'));
     rodape.append(pedir);
     container.append(cabecalho, grade);
     if (!produtos.length) container.append(criar('p', 'Catálogo em atualização para este perfil.'));
@@ -588,4 +777,61 @@ function montarRodape(site) {
     lista.append(item);
   }
   if (!lista.children.length) lista.append(criar('li', 'Pontos de venda em atualização.'));
+}
+
+// Busca do endereço no cadastro. O número e o complemento são preenchidos pelo cliente.
+let consultaCepAtual;
+let temporizadorCep;
+const preenchidosCep = new WeakMap();
+
+conteudo.addEventListener('input', (evento) => {
+  const campo = evento.target;
+  const form = campo.closest('form[data-form="cadastro"]');
+  if (!form || campo.name !== 'cep') return;
+  clearTimeout(temporizadorCep);
+  consultaCepAtual?.abort();
+  const cep = campo.value.replace(/\D/g, '');
+  const aviso = form.querySelector('#cep-status');
+  const anteriores = preenchidosCep.get(form);
+  if (anteriores && anteriores.cep !== cep) {
+    for (const [nome, valor] of Object.entries(anteriores.campos)) {
+      if (form.elements[nome].value === valor) form.elements[nome].value = '';
+    }
+    preenchidosCep.delete(form);
+  }
+  if (cep.length !== 8) {
+    aviso.textContent = 'Informe os 8 dígitos do CEP ou preencha o endereço manualmente.';
+    return;
+  }
+  temporizadorCep = setTimeout(() => buscarEndereco(form, campo, cep), 350);
+});
+
+async function buscarEndereco(form, campo, cep) {
+  const controle = new AbortController();
+  consultaCepAtual = controle;
+  const aviso = form.querySelector('#cep-status');
+  const campos = ['logradouro', 'bairro', 'cidade', 'uf'];
+  const valoresIniciais = Object.fromEntries(campos.map((nome) => [nome, form.elements[nome].value]));
+  aviso.textContent = 'Buscando endereço…';
+  try {
+    const resposta = await fetch('/api/cep/' + cep, { signal: controle.signal, cache: 'no-store' });
+    const endereco = await resposta.json();
+    if (!resposta.ok) throw new Error(endereco.erro || 'Não foi possível consultar o CEP.');
+    if (!form.isConnected || controle.signal.aborted || campo.value.replace(/\D/g, '') !== cep) return;
+    const alterados = {};
+    for (const nome of campos) {
+      // Conserva alterações que o cliente fez enquanto aguardava a resposta.
+      if (endereco[nome] && form.elements[nome].value === valoresIniciais[nome]) {
+        form.elements[nome].value = endereco[nome];
+        alterados[nome] = endereco[nome];
+      }
+    }
+    preenchidosCep.set(form, { cep, campos: alterados });
+    campo.value = cep.slice(0, 5) + '-' + cep.slice(5);
+    aviso.textContent = 'Endereço localizado. Confira os campos e informe o número e o complemento.';
+  } catch (erro) {
+    if (controle.signal.aborted || !form.isConnected) return;
+    aviso.textContent = erro.message.includes('CEP') ? erro.message :
+      'A busca está indisponível. Você pode preencher o endereço manualmente.';
+  }
 }

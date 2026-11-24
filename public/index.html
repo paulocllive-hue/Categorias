@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Catálogo da A14 Representações para varejistas, atacadistas e distribuidores. Conheça Kamai, Mega Batatas e Doce Bem.">
-  <title>A14 Reprensetante | Catálogo comercial</title>
+  <meta name="description" content="Catálogo A14 Representações. Conheça Kamai, Mega Batatas e Doce Bem e faça pedidos para sua empresa.">
+  <title>A14 Representações | Catálogo comercial</title>
   <link rel="stylesheet" href="./estilo.css">
   <script src="./app.js" defer></script>
 </head>
@@ -12,114 +12,69 @@
   <a class="pular" href="#principal">Ir para o conteúdo</a>
   <header class="cabecalho">
     <div class="container barra">
-      <a class="logo" href="#" aria-label="MSC Representações, página inicial">
-        <img class="logo-imagem" src="img\logo A14 200.png" alt="">
-      
-        <span class="logo-subtitulo">REPRESENTAÇÕES</span>
+      <a class="logo" href="#" aria-label="A14 Representações, página inicial">
+        <img class="logo-imagem" src="./img/logo-a14.png" alt="A14">
+        <span class="logo-subtitulo">Representações</span>
       </a>
-      <nav aria-label="Marcas representadas">
-        <a href="#kamai">Kamai</a>
-        <a href="#mega">Mega Batatas</a>
-        <a href="#doce">Doce Bem</a>
+      <nav aria-label="Navegação principal">
+        <a href="#marcas">Marcas</a>
+        <a href="#produtos">Produtos</a>
+        <a href="#contatos">Contato</a>
       </nav>
       <div class="acoes">
+        <span id="perfil-atual" class="perfil-atual" hidden></span>
         <button type="button" class="acao-conta" id="conta">Entrar</button>
         <button type="button" class="botao botao-carrinho" id="carrinho">Carrinho <span id="quantidade">0</span></button>
       </div>
     </div>
   </header>
-
   <main id="principal">
-    <section class="abertura" aria-labelledby="titulo">
-      <div class="container abertura-grid">
-        <div class="abertura-texto">
-          <p class="sobretitulo"><span></span> Catálogo comercial</p>
-          <h1 id="titulo">Vida<br>& <em>Equilibrio</em></h1>
-          <p class="introducao">Conheça o portfólio da MSC e faça pedidos com as condições comerciais do seu perfil.</p>
-          <a class="botao botao-claro" href="#marcas">Explorar marcas <span aria-hidden="true">↓</span></a>
-          <p class="segmentos">Para varejistas, atacadistas e distribuidores</p>
-        </div>
-        <div class="vitrine carrossel-vitrine" aria-label="Produtos em destaque">
-  <div class="carrossel-fotos">
-    <img src="img/kamai-gin.webp" alt="Gin Kamai Sunset">
-    <img src="img/brisa-400.webp" alt="Batata Palha Brisa Tradicional" hidden>
-    <img src="img/doce-1000.webp" alt="Açúcar Mascavo Doce Bem" hidden>
-  </div>
+    <h1 class="somente-leitor">Catálogo A14 Representações</h1>
+    <p class="container carregamento" id="estado-site" role="status">Carregando catálogo…</p>
 
-  <div class="carrossel-controles">
-    <button type="button" data-carrossel-anterior aria-label="Imagem anterior">←</button>
-    <button type="button" data-carrossel-pausa>Pausar</button>
-    <button type="button" data-carrossel-proxima aria-label="Próxima imagem">→</button>
-  </div>
-</div>
+    <section class="banner container" aria-label="Destaques das marcas" aria-roledescription="carrossel" hidden>
+      <div class="banner-slides" id="banner-slides"></div>
+      <div class="banner-controles">
+        <div class="banner-indicadores" id="banner-indicadores" aria-label="Escolher destaque"></div>
+        <div class="carrossel-controles">
+          <button type="button" data-carrossel-anterior aria-label="Destaque anterior">←</button>
+          <button type="button" data-carrossel-pausa>Pausar</button>
+          <button type="button" data-carrossel-proxima aria-label="Próximo destaque">→</button>
+        </div>
       </div>
     </section>
 
-    <div class="container portfolio" id="marcas">
-      <h2>Marcas representadas</h2>
-      <div class="marcas">
-        <section class="marca marca-kamai" id="kamai" aria-labelledby="titulo-kamai">
-          <div class="marca-visual kamai-visual">
-            <img src="img/kamai-gin.webp" alt="Garrafa de gin Kamai Sunset" loading="lazy" width="488" height="649">
-          </div>
-          <div class="marca-texto">
-            <img class="assinatura kamai-assinatura" src="img/kamai-logo.webp" alt="" loading="lazy">
-            <h3 id="titulo-kamai">Kamai Sunset</h3>
-            <p>London Dry Gin em garrafa de 700 ml para o portfólio de bebidas da sua empresa.</p>
-            <button type="button" class="botao botao-pedido" data-marca="kamai" aria-label="Fazer pedido de Kamai">Fazer pedido <span aria-hidden="true">↗</span></button>
-          </div>
-        </section>
+    <section class="container marcas-faixa" id="marcas" aria-labelledby="titulo-marcas" hidden>
+      <h2 id="titulo-marcas">Marcas representadas</h2>
+      <div class="marcas-atalhos" id="marcas-atalhos"></div>
+    </section>
 
-        <section class="marca marca-mega" id="mega" aria-labelledby="titulo-mega">
-          <div class="marca-visual mega-visual">
-            <img src="img/brisa-linha.webp" alt="Embalagens de batata palha Brisa Tradicional" loading="lazy" width="1250" height="900">
-          </div>
-          <div class="marca-texto">
-            <img class="assinatura" src="img/mega-logo.webp" alt="" loading="lazy">
-            <h3 id="titulo-mega">Mega Batatas</h3>
-            <p>Batata palha Brisa Tradicional em embalagens de 70 g, 200 g e 400 g.</p>
-            <button type="button" class="botao botao-pedido" data-marca="mega" aria-label="Fazer pedido de Mega Batatas">Fazer pedido <span aria-hidden="true">↗</span></button>
-          </div>
-        </section>
-
-        <section class="marca marca-doce" id="doce" aria-labelledby="titulo-doce">
-          <div class="marca-visual doce-visual">
-            <img src="img/doce-500.webp" alt="Açúcar mascavo Doce Bem de 500 g" loading="lazy" width="643" height="900">
-            <img src="img/doce-1000.webp" alt="Açúcar mascavo Doce Bem de 1 kg" loading="lazy" width="548" height="900">
-          </div>
-          <div class="marca-texto">
-            <img class="assinatura doce-assinatura" src="img/doce-logo.webp" alt="" loading="lazy">
-            <h3 id="titulo-doce">Doce Bem</h3>
-            <p>Açúcar mascavo em embalagens de 500 g e 1 kg para a linha de produtos naturais.</p>
-            <button type="button" class="botao botao-pedido" data-marca="doce" aria-label="Fazer pedido de Doce Bem">Fazer pedido <span aria-hidden="true">↗</span></button>
-          </div>
-        </section>
-      </div>
+    <div id="produtos">
+      <div id="secoes-marcas"></div>
     </div>
   </main>
 
-  <div class="doceben">
-    <img src="img/doce-logo.webp">
-
-
-  </div>
-
-  <div class="brisa">
-    <img src="img/logo brisa.webp">
-
-
-  </div>
-
-  <div class="kamai">
-    <img src="img/kamai-logo.webp">
-
-
-  </div>
-
-  <footer>
-    <div class="container rodape">
-      <a class="logo" href="#"><span class="logo-simbolo" aria-hidden="true">M</span><span>MSC<span class="logo-subtitulo">REPRESENTAÇÕES</span></span></a>
-      <a href="#marcas">Ver marcas ↑</a>
+  <footer id="contatos">
+    <div class="container rodape-grid">
+      <div>
+        <a class="logo" href="#" aria-label="Voltar ao início">
+          <img class="logo-imagem" src="./img/logo-a14.png" alt="A14">
+          <span class="logo-subtitulo">Representações</span>
+        </a>
+        <p>Pedidos para varejo, atacado e distribuidores.</p>
+      </div>
+      <section aria-labelledby="titulo-contatos">
+        <h2 id="titulo-contatos">Contato</h2>
+        <div id="lista-contatos"></div>
+      </section>
+      <section aria-labelledby="titulo-locais">
+        <h2 id="titulo-locais">Onde encontrar</h2>
+        <ul id="pontos-venda"></ul>
+      </section>
+    </div>
+    <div class="container rodape-base">
+      <p id="direitos">A14 Representações</p>
+      <a href="#marcas">Voltar às marcas ↑</a>
     </div>
   </footer>
 
@@ -143,8 +98,8 @@
       <label>Perfil comercial
         <select name="perfil" required>
           <option value="">Selecione</option>
-          <option value="varejista">Varejista</option>
-          <option value="atacadista">Atacadista</option>
+          <option value="varejista">Varejo</option>
+          <option value="atacadista">Atacado</option>
           <option value="distribuidor">Distribuidor</option>
         </select>
       </label>

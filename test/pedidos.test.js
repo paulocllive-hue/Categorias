@@ -66,20 +66,43 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     assert.equal((await chamar('cadastro', 'POST', { ...cadastro(0), cnpj: '12.345.678/0001-00' })).status, 400);
 
     const contas = [];
-    for (const [i, esperado] of [9890, 8690, 7490].entries()) {
+    for (const [i, esperado] of [7200, 6880, 8500].entries()) {
       const conta = await chamar('cadastro', 'POST', cadastro(i));
       assert.equal(conta.status, 201, JSON.stringify(conta.dados));
       contas.push(conta.cookie);
       const catalogo = await chamar('catalogo', 'GET', undefined, conta.cookie);
       assert.equal(catalogo.dados.produtos[0].preco_centavos, esperado);
+      const kamai = catalogo.dados.produtos.filter((item) => item.marca === 'kamai' && item.disponivel);
+      assert.equal(kamai.length, i === 2 ? 8 : 6);
+      for (const produto of kamai) {
+        if (produto.venda === 'caixa') assert.equal(produto.preco_centavos, esperado * 6);
+      }
+      const economico = catalogo.dados.produtos.find((item) => item.id === 'kamai-gin-1500');
+      assert.equal(economico.preco_centavos, i === 2 ? 6000 : null);
+      assert.equal(economico.disponivel, i === 2);
     }
-    const [varejo, atacado] = contas;
+    const [varejo, atacado, distribuidor] = contas;
+    assert.equal(app.db.prepare('SELECT COUNT(*) AS total FROM produtos WHERE ativo = 1').get().total, 13);
+    assert.equal(app.db.prepare('SELECT COUNT(*) AS total FROM precos_produto').get().total, 35);
+    const cadastroTamper = { ...cadastro(0), perfil: 'admin' };
+    assert.equal((await chamar('cadastro', 'POST', cadastroTamper)).status, 400);
+    for (const cookie of [varejo, atacado]) {
+      assert.equal((await chamar('carrinho', 'PUT', { id: 'kamai-gin-1500', acao: 'adicionar', perfil: 'distribuidor' }, cookie)).status, 409);
+    }
+    const exclusivo = await chamar('carrinho', 'PUT', { id: 'kamai-vodka-1500', acao: 'adicionar' }, distribuidor);
+    assert.equal(exclusivo.dados.itens[0].preco_centavos, 4000);
+    await chamar('carrinho', 'PUT', { id: 'kamai-vodka-1500', acao: 'remover' }, distribuidor);
+    const site = await chamar('site');
+    assert.equal(site.dados.marcas.length, 3);
+    assert.equal((await fetch(base + '/img/logo-a14.png')).status, 200);
+    assert.equal((await fetch(base + '/img/logo-a14.png')).headers.get('content-type'), 'image/png');
+    assert.equal((await fetch(base + '/.env')).status, 404);
     assert.equal((await chamar('cadastro', 'POST', cadastro(0))).status, 409);
     assert.equal((await chamar('login', 'POST', { email: cadastro(0).email, senha: 'outra' })).status, 401);
 
-    const item = { id: 'kamai-gin', acao: 'adicionar', preco_centavos: 1 };
+    const item = { id: 'kamai-gin', acao: 'adicionar', preco_centavos: 1, perfil: 'distribuidor' };
     const primeiro = await chamar('carrinho', 'PUT', item, varejo);
-    assert.equal(primeiro.dados.itens[0].preco_centavos, 9890);
+    assert.equal(primeiro.dados.itens[0].preco_centavos, 7200);
     assert.deepEqual((await chamar('carrinho', 'GET', undefined, atacado)).dados.itens, []);
     await chamar('logout', 'POST', {}, varejo);
     assert.equal((await chamar('carrinho', 'GET', undefined, varejo)).status, 401);
@@ -101,7 +124,7 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     const corpo = { chave, versao: revisado.dados.versao, total_centavos: 1 };
     const [pedido, repetido] = await Promise.all([chamar('pedidos', 'POST', corpo, sessao), chamar('pedidos', 'POST', corpo, sessao)]);
     assert.equal(pedido.status, 201);
-    assert.equal(pedido.dados.pedido.total_centavos, 29_670);
+    assert.equal(pedido.dados.pedido.total_centavos, 21_600);
     assert.equal(repetido.dados.pedido.id, pedido.dados.pedido.id);
     assert.deepEqual((await chamar('carrinho', 'GET', undefined, sessao)).dados.itens, []);
     assert.equal((await chamar('pedidos', 'GET', undefined, sessao)).dados.pedidos.length, 1);
@@ -112,8 +135,8 @@ test('contas, tabelas, carrinho após reinício, checkout concorrente e notifica
     }
     const email = await readFile(join(dataDir, 'emails', 'pedido-1.txt'), 'utf8');
     assert.match(email, /Pedido #1/);
-    assert.match(email, /3 × Kamai Sunset/);
-    assert.match(email, /296,70/);
+    assert.match(email, /3 × Kamai Gin Sunset/);
+    assert.match(email, /216,00/);
   } finally {
     await parar();
     await rm(dataDir, { recursive: true, force: true });

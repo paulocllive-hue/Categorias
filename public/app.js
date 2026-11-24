@@ -8,8 +8,9 @@ const botaoConta = document.querySelector('#conta');
 const botaoCarrinho = document.querySelector('#carrinho');
 const contador = document.querySelector('#quantidade');
 
-const marcas = { kamai: 'Kamai Sunset', mega: 'Mega Batatas', doce: 'Doce Bem' };
-const perfis = { varejista: 'Varejista', atacadista: 'Atacadista', distribuidor: 'Distribuidor' };
+const marcas = {};
+let configuracaoSite = null;
+const perfis = { varejista: 'Varejo', atacadista: 'Atacado', distribuidor: 'Distribuidor' };
 const dinheiro = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataPedido = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'America/Cuiaba' });
 
@@ -31,6 +32,9 @@ async function api(caminho, metodo = 'GET', dados) {
     headers: dados ? { 'Content-Type': 'application/json' } : {},
     body: dados ? JSON.stringify(dados) : undefined
   });
+  if (!resposta.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('Abra o site pela porta do servidor Node, normalmente http://127.0.0.1:3000.');
+  }
   const resultado = await resposta.json();
   if (!resposta.ok) {
     const erro = new Error(resultado.erro);
@@ -70,6 +74,9 @@ function avisar(texto) {
 
 function atualizarCabecalho() {
   botaoConta.textContent = conta ? 'Minha conta' : 'Entrar';
+  const perfilAtual = document.querySelector('#perfil-atual');
+  perfilAtual.textContent = conta ? perfis[conta.perfil] : '';
+  perfilAtual.hidden = !conta;
   contador.textContent = itens.reduce((total, item) => total + item.quantidade, 0);
 }
 
@@ -85,7 +92,7 @@ function abrir(novaTela, rotulo) {
 }
 
 function avisoDemonstracao() {
-  if (demonstracao) conteudo.append(criar('p', 'Ambiente de demonstração. Use dados fictícios. Os preços são ilustrativos.', 'demonstracao'));
+  if (demonstracao) conteudo.append(criar('p', 'Ambiente de teste. Use dados fictícios. Os pedidos serão registrados para conferência.', 'demonstracao'));
 }
 
 function mostrarFormulario(tipo) {
@@ -108,6 +115,8 @@ function detalheProduto(produto, textoPreco) {
     imagem.src = '/img/' + produto.imagem;
     imagem.alt = '';
     linha.append(imagem);
+  } else {
+    linha.append(criar('span', 'Sem foto', 'linha-sem-foto'));
   }
   const detalhe = criar('div', '', 'linha-detalhe');
   detalhe.append(criar('strong', produto.nome));
@@ -127,7 +136,7 @@ async function mostrarCatalogo(marca) {
   status('');
   avisoDemonstracao();
   conteudo.append(criar('p', 'Tabela comercial · ' + perfis[conta.perfil]));
-  const lista = produtos.filter((produto) => produto.marca === marca);
+  const lista = produtos.filter((produto) => produto.marca === marca && produto.disponivel);
   if (!lista.length) conteudo.append(criar('p', 'Nenhum produto disponível nesta marca.'));
   for (const produto of lista) {
     if (produto.preco_centavos === null) throw Object.assign(new Error('Sua sessão expirou.'), { status: 401 });
@@ -135,6 +144,9 @@ async function mostrarCatalogo(marca) {
     const adicionar = botao('Adicionar', 'adicionar');
     adicionar.dataset.produto = produto.id;
     adicionar.setAttribute('aria-label', 'Adicionar ' + produto.nome + ' ' + produto.apresentacao);
+    if (produto.fonte_preco === 'Preço ilustrativo de teste') {
+      linha.querySelector('.linha-detalhe').append(criar('small', produto.fonte_preco));
+    }
     linha.append(adicionar);
     conteudo.append(linha);
   }
@@ -297,6 +309,7 @@ const acoes = {
     itens = [];
     destino = null;
     atualizarCabecalho();
+    await carregarCatalogoVitrine();
     painel.close();
     avisar('Você saiu. Seu carrinho continua salvo na conta.');
   }
@@ -327,14 +340,19 @@ async function executar(operacao, elemento) {
 }
 
 const inicializacao = (async () => {
+  const estado = document.querySelector('#estado-site');
   try {
-    const [sessao, catalogo] = await Promise.all([api('/sessao'), api('/catalogo')]);
+    const [sessao, site] = await Promise.all([api('/sessao'), api('/site')]);
     conta = sessao.conta;
-    demonstracao = catalogo.demonstracao;
+    configuracaoSite = site;
+    for (const marca of site.marcas) marcas[marca.id] = marca.nome;
+    montarApresentacao(site);
+    await carregarCatalogoVitrine();
     if (conta) salvarEstadoCarrinho(await api('/carrinho'));
     atualizarCabecalho();
-  } catch {
-    avisar('Não foi possível carregar a conta e o catálogo. Atualize a página para tentar novamente.');
+    estado.hidden = true;
+  } catch (erro) {
+    estado.textContent = erro.message || 'Não foi possível carregar o catálogo. Atualize a página.';
   }
 })();
 
@@ -347,11 +365,13 @@ botaoCarrinho.addEventListener('click', () => executar(async () => {
   await inicializacao;
   await mostrarCarrinho();
 }));
-document.querySelectorAll('[data-marca]').forEach((elemento) => {
-  elemento.addEventListener('click', () => executar(async () => {
+document.addEventListener('click', (evento) => {
+  const elemento = evento.target.closest('button[data-marca]');
+  if (!elemento) return;
+  void executar(async () => {
     await inicializacao;
     await mostrarCatalogo(elemento.dataset.marca);
-  }));
+  });
 });
 
 document.querySelector('#fechar').addEventListener('click', () => {
@@ -382,57 +402,190 @@ conteudo.addEventListener('submit', (evento) => {
     destino = null;
     salvarEstadoCarrinho(await api('/carrinho'));
     atualizarCabecalho();
+    await carregarCatalogoVitrine();
     if (proximaTela === 'catalogo') return mostrarCatalogo(marcaAtual);
     if (proximaTela === 'carrinho') return mostrarCarrinho();
     return mostrarConta();
   }, form.querySelector('[type="submit"]'));
 });
 
-{
-  const carrossel = document.querySelector('.carrossel-vitrine');
+function imagemLocal(arquivo, alt, classe) {
+  const imagem = criar('img', '', classe);
+  imagem.src = './img/' + encodeURIComponent(arquivo);
+  imagem.alt = alt;
+  imagem.loading = 'lazy';
+  return imagem;
+}
 
-  if (carrossel) {
-    const fotos = [...carrossel.querySelectorAll('.carrossel-fotos img')];
-    const anterior = carrossel.querySelector('[data-carrossel-anterior]');
-    const proxima = carrossel.querySelector('[data-carrossel-proxima]');
-    const pausa = carrossel.querySelector('[data-carrossel-pausa]');
+function montarApresentacao(site) {
+  document.querySelectorAll('.logo-imagem').forEach((logo) => {
+    logo.src = './img/' + encodeURIComponent(site.representante.logo);
+    logo.alt = site.representante.nome;
+  });
+  document.querySelector('#direitos').textContent = new Date().getFullYear() + ' · ' + site.representante.nome;
 
-    let fotoAtual = 0;
-    let temporizador = null;
-
-    function trocarFoto(passo) {
-      fotos[fotoAtual].hidden = true;
-      fotoAtual = (fotoAtual + passo + fotos.length) % fotos.length;
-      fotos[fotoAtual].hidden = false;
-    }
-
-    function iniciarRotacao() {
-      clearInterval(temporizador);
-      temporizador = setInterval(() => trocarFoto(1), 4000);
-      pausa.textContent = 'Pausar';
-    }
-
-    function navegar(passo) {
-      trocarFoto(passo);
-
-      if (temporizador !== null) {
-        iniciarRotacao();
-      }
-    }
-
-    anterior.addEventListener('click', () => navegar(-1));
-    proxima.addEventListener('click', () => navegar(1));
-
-    pausa.addEventListener('click', () => {
-      if (temporizador === null) {
-        iniciarRotacao();
-      } else {
-        clearInterval(temporizador);
-        temporizador = null;
-        pausa.textContent = 'Reproduzir';
-      }
-    });
-
-    iniciarRotacao();
+  const atalhos = document.querySelector('#marcas-atalhos');
+  for (const marca of site.marcas) {
+    const atalho = criar('a', '', 'marca-atalho');
+    atalho.href = '#' + marca.id;
+    const circulo = criar('span', '', 'marca-circulo');
+    circulo.append(imagemLocal(marca.logo, ''));
+    atalho.append(circulo, criar('span', marca.nome));
+    atalhos.append(atalho);
   }
+  document.querySelector('#marcas').hidden = false;
+  montarBanner(site.slides);
+  montarRodape(site);
+}
+
+function montarBanner(slides) {
+  if (!slides.length) return;
+  const area = document.querySelector('#banner-slides');
+  const indicadores = document.querySelector('#banner-indicadores');
+  slides.forEach((slide, indice) => {
+    const artigo = criar('article', '', 'banner-slide');
+    artigo.hidden = indice !== 0;
+    artigo.setAttribute('aria-roledescription', 'slide');
+    artigo.setAttribute('aria-label', String(indice + 1) + ' de ' + slides.length);
+    const texto = criar('div', '', 'banner-texto');
+    const link = criar('a', 'Conhecer a marca', 'botao');
+    link.href = '#' + slide.marca;
+    texto.append(criar('p', 'Catálogo comercial', 'sobretitulo'), criar('h2', slide.titulo), criar('p', slide.texto), link);
+    const imagem = imagemLocal(slide.imagem, '', 'banner-imagem');
+    imagem.loading = 'eager';
+    imagem.style.objectPosition = slide.posicao || 'center';
+    artigo.append(texto, imagem);
+    area.append(artigo);
+    const indicador = criar('button', String(indice + 1));
+    indicador.type = 'button';
+    indicador.setAttribute('aria-label', 'Mostrar destaque ' + (indice + 1));
+    indicador.setAttribute('aria-pressed', String(indice === 0));
+    indicadores.append(indicador);
+  });
+  document.querySelector('.banner').hidden = false;
+  iniciarBanner();
+}
+
+function iniciarBanner() {
+  const banner = document.querySelector('.banner');
+  const slides = [...banner.querySelectorAll('.banner-slide')];
+  const indicadores = [...banner.querySelectorAll('.banner-indicadores button')];
+  const anterior = banner.querySelector('[data-carrossel-anterior]');
+  const proxima = banner.querySelector('[data-carrossel-proxima]');
+  const pausa = banner.querySelector('[data-carrossel-pausa]');
+  let indice = 0;
+  let temporizador = null;
+  let pausado = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function programar() {
+    clearInterval(temporizador);
+    pausa.textContent = pausado ? 'Reproduzir' : 'Pausar';
+    if (!pausado && !document.hidden && slides.length > 1) {
+      temporizador = setInterval(() => mostrar(indice + 1), 5000);
+    }
+  }
+  function mostrar(proximo) {
+    const alvo = (proximo + slides.length) % slides.length;
+    if (alvo !== indice && slides[indice].contains(document.activeElement)) {
+      // Evita esconder um link enquanto o visitante está usando o teclado.
+      pausado = true;
+      programar();
+      return;
+    }
+    slides[indice].hidden = true;
+    indicadores[indice].setAttribute('aria-pressed', 'false');
+    indice = alvo;
+    slides[indice].hidden = false;
+    indicadores[indice].setAttribute('aria-pressed', 'true');
+  }
+  anterior.addEventListener('click', () => { mostrar(indice - 1); programar(); });
+  proxima.addEventListener('click', () => { mostrar(indice + 1); programar(); });
+  pausa.addEventListener('click', () => { pausado = !pausado; programar(); });
+  indicadores.forEach((botao, i) => botao.addEventListener('click', () => { mostrar(i); programar(); }));
+  document.addEventListener('visibilitychange', programar);
+  programar();
+}
+
+async function carregarCatalogoVitrine() {
+  if (!configuracaoSite) return;
+  const catalogo = await api('/catalogo');
+  demonstracao = catalogo.demonstracao;
+  const secoes = document.querySelector('#secoes-marcas');
+  secoes.replaceChildren();
+  for (const marca of configuracaoSite.marcas) {
+    const secao = criar('section', '', 'marca-secao');
+    secao.id = marca.id;
+    secao.setAttribute('aria-labelledby', 'titulo-' + marca.id);
+    const container = criar('div', '', 'container');
+    const cabecalho = criar('div', '', 'marca-cabecalho');
+    const descricao = criar('div');
+    const titulo = criar('h2', marca.nome);
+    titulo.id = 'titulo-' + marca.id;
+    descricao.append(titulo, criar('p', marca.descricao));
+    cabecalho.append(imagemLocal(marca.logo, ''), descricao);
+
+    const grade = criar('div', '', 'produtos-grade');
+    const produtos = catalogo.produtos.filter((p) => p.marca === marca.id && p.disponivel);
+    for (const produto of produtos) {
+      const card = criar('article', '', 'produto-card');
+      const foto = criar('div', '', 'produto-foto');
+      if (produto.imagem) {
+        foto.append(imagemLocal(produto.imagem, produto.nome + ' · ' + produto.apresentacao));
+      } else {
+        foto.append(criar('span', 'Imagem em atualização', 'imagem-pendente'));
+      }
+      const info = criar('div', '', 'produto-info');
+      info.append(criar('h3', produto.nome), criar('p', produto.apresentacao + ' · ' + produto.venda));
+      if (produto.preco_centavos !== null) {
+        info.append(criar('p', brl(produto.preco_centavos), 'produto-preco'));
+        if (produto.fonte_preco === 'Preço ilustrativo de teste') info.append(criar('p', produto.fonte_preco));
+      }
+      card.append(foto, info);
+      grade.append(card);
+    }
+    const rodape = criar('div', '', 'marca-rodape');
+    const pedir = criar('button', 'Fazer pedido', 'botao botao-pedido');
+    pedir.type = 'button';
+    pedir.dataset.marca = marca.id;
+    pedir.setAttribute('aria-label', 'Fazer pedido de ' + marca.nome);
+    rodape.append(pedir);
+    container.append(cabecalho, grade);
+    if (!produtos.length) container.append(criar('p', 'Catálogo em atualização para este perfil.'));
+    container.append(rodape);
+    secao.append(container);
+    secoes.append(secao);
+  }
+}
+
+function montarRodape(site) {
+  const contatos = document.querySelector('#lista-contatos');
+  const representante = site.representante;
+  const links = [
+    [representante.email, 'mailto:' + representante.email],
+    [representante.telefone, 'tel:' + representante.telefone.replace(/[^+0-9]/g, '')],
+    [representante.whatsapp ? 'WhatsApp' : '', 'https://wa.me/' + representante.whatsapp.replace(/[^0-9]/g, '')]
+  ];
+  for (const [texto, url] of links) {
+    if (texto) {
+      const link = criar('a', texto);
+      link.href = url;
+      contatos.append(link);
+    }
+  }
+  if (representante.endereco) contatos.append(criar('p', representante.endereco));
+  if (!contatos.children.length) contatos.append(criar('p', 'Contatos em atualização.'));
+
+  const lista = document.querySelector('#pontos-venda');
+  for (const local of site.pontos_venda) {
+    const item = criar('li');
+    item.append(criar('strong', local.nome), criar('span', local.endereco));
+    if (local.marcas?.length) item.append(criar('span', local.marcas.join(' · ')));
+    if (local.mapa && /^https?:\/\//.test(local.mapa)) {
+      const mapa = criar('a', 'Ver localização');
+      mapa.href = local.mapa;
+      item.append(mapa);
+    }
+    lista.append(item);
+  }
+  if (!lista.children.length) lista.append(criar('li', 'Pontos de venda em atualização.'));
 }

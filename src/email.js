@@ -30,7 +30,7 @@ export function criarFilaEmail(db, config) {
       const fila = db.prepare("SELECT * FROM pedidos WHERE email_status = 'pendente' AND email_proxima_tentativa <= ? ORDER BY id LIMIT 10").all(Date.now());
       for (const pedido of fila) {
         const itens = db.prepare('SELECT * FROM itens_pedido WHERE pedido_id = ? ORDER BY produto_id').all(pedido.id);
-        const assunto = 'Novo pedido MSC #' + pedido.id;
+        const assunto = 'Novo pedido A14 #' + pedido.id;
         const corpo = mensagem(pedido, itens);
         let status = 'simulado';
         try {

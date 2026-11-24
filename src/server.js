@@ -1,17 +1,17 @@
 import { createServer } from 'node:http';
 
-import { createReadStream, mkdirSync, readFileSync } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { DatabaseSync } from 'node:sqlite';
-import { confereSenha, criarToken, ErroHttp, hashSenha, hashToken, perfis, validarCadastro } from './contas.js';
+import { abrirBanco, consultarProdutos, transacao } from './banco.js';
+import { confereSenha, criarToken, ErroHttp, hashSenha, hashToken, validarCadastro } from './contas.js';
 import { criarFilaEmail } from './email.js';
 
 const raiz = fileURLToPath(new URL('../', import.meta.url));
 const diasDeSessao = 7;
-const arquivos = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp' };
+const arquivos = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webp': 'image/webp' };
 
 function json(res, status, dados) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -43,22 +43,11 @@ function contaPublica(conta) {
   return { id, nome, razao_social, cnpj, email, perfil, endereco: JSON.parse(endereco_json) };
 }
 
-function transacao(db, operacao) {
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const resultado = operacao();
-    db.exec('COMMIT');
-    return resultado;
-  } catch (erro) {
-    db.exec('ROLLBACK');
-    throw erro;
-  }
-}
-
 export function criarAplicacao(opcoes = {}) {
   const config = {
     dataDir: resolve(raiz, process.env.DATA_DIR || 'data'),
     catalogPath: resolve(raiz, process.env.CATALOG_FILE || 'src/catalogo.json'),
+    sitePath: resolve(raiz, process.env.SITE_FILE || 'src/site.json'),
     emailMode: process.env.EMAIL_MODE || 'file',
     emailKey: process.env.RESEND_API_KEY,
     emailFrom: process.env.ORDER_EMAIL_FROM,
@@ -67,19 +56,13 @@ export function criarAplicacao(opcoes = {}) {
     ...opcoes
   };
   const catalogo = JSON.parse(readFileSync(config.catalogPath, 'utf8'));
-  const produtos = new Map(catalogo.produtos.map((produto) => [produto.id, produto]));
-  if (typeof catalogo.demonstracao !== 'boolean' || produtos.size !== catalogo.produtos.length || [...produtos.values()].some((produto) =>
-    !perfis.every((perfil) => Number.isInteger(produto.precos?.[perfil]) && produto.precos[perfil] > 0 && produto.precos[perfil] <= 10_000_000))) {
-    throw new Error('Confira os produtos e os preços inteiros em centavos para os três perfis.');
-  }
+  const site = JSON.parse(readFileSync(config.sitePath, 'utf8'));
   if (!['file', 'resend'].includes(config.emailMode) ||
     (config.emailMode === 'resend' && (!config.emailKey || !config.emailFrom || !config.emailTo))) {
     throw new Error('Para envio real, preencha a chave e os endereços de e-mail.');
   }
 
-  mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(join(config.dataDir, 'msc.sqlite'), { timeout: 5000 });
-  db.exec(readFileSync(join(raiz, 'src/schema.sql'), 'utf8'));
+  const db = abrirBanco(config.dataDir, catalogo, site);
   const filaEmail = criarFilaEmail(db, config);
   const filaSeguro = () => filaEmail().catch((erro) => console.error('Fila de e-mail: ' + erro.message));
   const ciclo = setInterval(() => {
@@ -115,16 +98,12 @@ export function criarAplicacao(opcoes = {}) {
     cookie(res, token, segundos);
   }
 
-  function produtoPublico(produto, conta) {
-    const { precos, ...dados } = produto;
-    return { ...dados, preco_centavos: conta ? precos[conta.perfil] : null };
-  }
-
   function carrinho(conta) {
+    const produtos = new Map(consultarProdutos(db, conta.perfil).map((produto) => [produto.id, produto]));
     const registros = db.prepare('SELECT produto_id, quantidade FROM carrinho WHERE conta_id = ? ORDER BY rowid').all(conta.id);
     return registros.map(({ produto_id, quantidade }) => ({
-      ...(produtos.has(produto_id) ? produtoPublico(produtos.get(produto_id), conta) :
-        { id: produto_id, nome: 'Produto indisponível', preco_centavos: null }),
+      ...(produtos.get(produto_id) ??
+        { id: produto_id, nome: 'Produto indisponível', preco_centavos: null, disponivel: false }),
       quantidade
     }));
   }
@@ -177,8 +156,13 @@ export function criarAplicacao(opcoes = {}) {
     switch (rota) {
       case 'GET /api/sessao':
         return json(res, 200, { conta: conta ? contaPublica(conta) : null });
+      case 'GET /api/site':
+        return json(res, 200, site);
       case 'GET /api/catalogo':
-        return json(res, 200, { demonstracao: catalogo.demonstracao, produtos: [...produtos.values()].map((p) => produtoPublico(p, conta)) });
+        return json(res, 200, {
+          demonstracao: catalogo.demonstracao,
+          produtos: consultarProdutos(db, conta?.perfil)
+        });
       case 'POST /api/cadastro':
       case 'POST /api/login':
         return autenticar(req, res, caminho, tokenHash);
@@ -200,7 +184,13 @@ export function criarAplicacao(opcoes = {}) {
         }
         transacao(db, () => {
           const atual = db.prepare('SELECT quantidade FROM carrinho WHERE conta_id = ? AND produto_id = ?').get(conta.id, id)?.quantidade ?? 0;
-          if (acao === 'adicionar' && !produtos.has(id)) throw new ErroHttp(404, 'Produto indisponível.');
+          if (acao === 'adicionar') {
+            const produto = db.prepare(`SELECT t.preco_centavos FROM produtos p
+              JOIN precos_produto t ON t.produto_id = p.id AND t.perfil = ?
+              JOIN marcas m ON m.id = p.marca_id AND m.ativo = 1
+              WHERE p.id = ? AND p.ativo = 1`).get(conta.perfil, id);
+            if (!produto) throw new ErroHttp(409, 'Produto sem preço disponível para o seu perfil.');
+          }
           const quantidade = acao === 'remover' ? 0 : atual + (acao === 'adicionar' ? 1 : -1);
           if (quantidade > 999) throw new ErroHttp(400, 'O limite é de 999 por item.');
           if (quantidade <= 0) {
@@ -256,7 +246,7 @@ export function criarAplicacao(opcoes = {}) {
       }
       if (!['GET', 'HEAD'].includes(req.method)) throw new ErroHttp(405, 'Método inválido.');
       const publico = caminho === '/' ? '/index.html' : caminho;
-      if (!/^\/(?:index\.html|estilo\.css|app\.js|img\/[a-z0-9-]+\.webp)$/.test(publico)) throw new ErroHttp(404, 'Página não encontrada.');
+      if (!/^\/(?:index\.html|estilo\.css|app\.js|img\/[a-z0-9-]+\.(?:webp|png|jpe?g))$/.test(publico)) throw new ErroHttp(404, 'Página não encontrada.');
       const arquivo = join(raiz, 'public', publico);
       const info = await stat(arquivo);
       res.writeHead(200, { 'Content-Type': arquivos[extname(arquivo)], 'Content-Length': info.size });

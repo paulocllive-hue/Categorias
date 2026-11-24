@@ -1,0 +1,54 @@
+{
+  "representante": {
+    "nome": "A14 Representações",
+    "logo": "logo-a14.png",
+    "email": "",
+    "telefone": "",
+    "whatsapp": "",
+    "endereco": ""
+  },
+  "slides": [
+    {
+      "marca": "kamai",
+      "titulo": "Kamai no seu portfólio",
+      "texto": "Conheça as apresentações de gin e vodka e monte o pedido para sua empresa.",
+      "imagem": "fundokamai.webp",
+      "posicao": "center"
+    },
+    {
+      "marca": "mega",
+      "titulo": "Brisa para sua prateleira",
+      "texto": "Batata palha tradicional em diferentes tamanhos de embalagem.",
+      "imagem": "fundobatatas.webp",
+      "posicao": "center"
+    },
+    {
+      "marca": "doce",
+      "titulo": "Conheça a Doce Bem",
+      "texto": "Açúcar mascavo em embalagens de 500 g e 1 kg.",
+      "imagem": "fundodoceben.webp",
+      "posicao": "center"
+    }
+  ],
+  "marcas": [
+    {
+      "id": "kamai",
+      "nome": "Kamai",
+      "logo": "logo-kamai-sem-fundo.webp",
+      "descricao": "Gin Sunset, vodka e gin 0% álcool. Confira as apresentações disponíveis para o seu perfil comercial."
+    },
+    {
+      "id": "mega",
+      "nome": "Mega Batatas",
+      "logo": "mega-logo.webp",
+      "descricao": "Conheça a linha de batata palha Brisa Tradicional e suas gramaturas."
+    },
+    {
+      "id": "doce",
+      "nome": "Doce Bem",
+      "logo": "doce-logo.webp",
+      "descricao": "Açúcar mascavo em embalagens de 500 g e 1 kg para compor sua linha de produtos naturais."
+    }
+  ],
+  "pontos_venda": []
+}

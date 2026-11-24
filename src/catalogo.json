@@ -4,11 +4,110 @@
     {
       "id": "kamai-gin",
       "marca": "kamai",
-      "nome": "Kamai Sunset · London Dry Gin",
-      "apresentacao": "700 ml",
-      "venda": "garrafa",
+      "nome": "Kamai Gin Sunset",
+      "apresentacao": "750 ml",
+      "venda": "unidade",
       "imagem": "kamai-gin.webp",
-      "precos": { "varejista": 9890, "atacadista": 8690, "distribuidor": 7490 }
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 6880,
+        "varejista": 7200,
+        "distribuidor": 8500
+      }
+    },
+    {
+      "id": "kamai-vodka",
+      "marca": "kamai",
+      "nome": "Kamai Vodka",
+      "apresentacao": "750 ml",
+      "venda": "unidade",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 6880,
+        "varejista": 7200,
+        "distribuidor": 8500
+      }
+    },
+    {
+      "id": "kamai-gin-zero",
+      "marca": "kamai",
+      "nome": "Kamai Gin 0% Álcool",
+      "apresentacao": "750 ml",
+      "venda": "unidade",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 6880,
+        "varejista": 7200,
+        "distribuidor": 8500
+      }
+    },
+    {
+      "id": "kamai-gin-caixa",
+      "marca": "kamai",
+      "nome": "Kamai Gin Sunset",
+      "apresentacao": "6 × 750 ml",
+      "venda": "caixa",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 41280,
+        "varejista": 43200,
+        "distribuidor": 51000
+      }
+    },
+    {
+      "id": "kamai-gin-zero-caixa",
+      "marca": "kamai",
+      "nome": "Kamai Gin 0% Álcool",
+      "apresentacao": "6 × 750 ml",
+      "venda": "caixa",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 41280,
+        "varejista": 43200,
+        "distribuidor": 51000
+      }
+    },
+    {
+      "id": "kamai-vodka-caixa",
+      "marca": "kamai",
+      "nome": "Kamai Vodka",
+      "apresentacao": "6 × 750 ml",
+      "venda": "caixa",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "atacadista": 41280,
+        "varejista": 43200,
+        "distribuidor": 51000
+      }
+    },
+    {
+      "id": "kamai-gin-1500",
+      "marca": "kamai",
+      "nome": "Kamai Gin Sunset Econômica",
+      "apresentacao": "1,5 L",
+      "venda": "unidade",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "distribuidor": 6000
+      }
+    },
+    {
+      "id": "kamai-vodka-1500",
+      "marca": "kamai",
+      "nome": "Kamai Vodka Econômica",
+      "apresentacao": "1,5 L",
+      "venda": "unidade",
+      "imagem": null,
+      "fonte_preco": "Tabela Kamai enviada",
+      "precos": {
+        "distribuidor": 4000
+      }
     },
     {
       "id": "brisa-400",
@@ -17,7 +116,12 @@
       "apresentacao": "400 g",
       "venda": "pacote",
       "imagem": "brisa-400.webp",
-      "precos": { "varejista": 1890, "atacadista": 1590, "distribuidor": 1390 }
+      "precos": {
+        "varejista": 1890,
+        "atacadista": 1590,
+        "distribuidor": 1390
+      },
+      "fonte_preco": "Preço ilustrativo de teste"
     },
     {
       "id": "brisa-200",
@@ -26,7 +130,12 @@
       "apresentacao": "200 g",
       "venda": "pacote",
       "imagem": "brisa-linha.webp",
-      "precos": { "varejista": 1090, "atacadista": 920, "distribuidor": 790 }
+      "precos": {
+        "varejista": 1090,
+        "atacadista": 920,
+        "distribuidor": 790
+      },
+      "fonte_preco": "Preço ilustrativo de teste"
     },
     {
       "id": "brisa-70",
@@ -35,7 +144,12 @@
       "apresentacao": "70 g",
       "venda": "pacote",
       "imagem": "brisa-linha.webp",
-      "precos": { "varejista": 490, "atacadista": 410, "distribuidor": 350 }
+      "precos": {
+        "varejista": 490,
+        "atacadista": 410,
+        "distribuidor": 350
+      },
+      "fonte_preco": "Preço ilustrativo de teste"
     },
     {
       "id": "doce-500",
@@ -44,7 +158,12 @@
       "apresentacao": "500 g",
       "venda": "pacote",
       "imagem": "doce-500.webp",
-      "precos": { "varejista": 1190, "atacadista": 990, "distribuidor": 870 }
+      "precos": {
+        "varejista": 1190,
+        "atacadista": 990,
+        "distribuidor": 870
+      },
+      "fonte_preco": "Preço ilustrativo de teste"
     },
     {
       "id": "doce-1000",
@@ -53,7 +172,12 @@
       "apresentacao": "1 kg",
       "venda": "pacote",
       "imagem": "doce-1000.webp",
-      "precos": { "varejista": 1990, "atacadista": 1740, "distribuidor": 1490 }
+      "precos": {
+        "varejista": 1990,
+        "atacadista": 1740,
+        "distribuidor": 1490
+      },
+      "fonte_preco": "Preço ilustrativo de teste"
     }
   ]
 }

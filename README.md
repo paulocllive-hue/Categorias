@@ -1,6 +1,6 @@
 # A14 Representações
 
-Versão 1.4 do catálogo de pedidos para compradores de empresas com CNPJ. A página segue a estrutura enviada no desenho, com cabeçalho compacto, banner de destaques, logos em círculos, uma seção horizontal por marca e rodapé para contato e pontos de venda. Os produtos e as seções crescem conforme o cadastro do catálogo.
+Versão 1.5 do catálogo de pedidos para compradores de empresas com CNPJ. A página segue a estrutura enviada no desenho, com cabeçalho compacto, banner de destaques, logos em círculos, uma seção horizontal por marca e rodapé para contato e pontos de venda. Os produtos e as seções crescem conforme o cadastro do catálogo.
 
 O primeiro fluxo a testar é entrar com um perfil comercial, ver o preço Kamai correspondente, adicionar produtos e confirmar o pedido. A página usa HTML, CSS e JavaScript. O Node.js recebe o cadastro e os pedidos, e o SQLite guarda os dados no próprio projeto.
 
@@ -9,6 +9,10 @@ O primeiro fluxo a testar é entrar com um perfil comercial, ver o preço Kamai 
 O cadastro agora busca o endereço pelo CEP. O e-mail do pedido inclui resumo HTML e planilha Excel com os dados da empresa, o endereço completo, os itens e o total. O guia ALTERACOES_CEP_EMAIL.md explica quais arquivos substituir, como configurar seu .env e como repetir os testes.
 
 Execute npm install após atualizar os arquivos. Em seguida, use npm run testar-email para gerar uma prévia ou enviá-la pela configuração SMTP ou Resend. O modo padrão file gera HTML, TXT, XLSX e EML em data/emails.
+
+## Carrinho integrado e identificação da empresa
+
+O guia CARRINHO_E_IDENTIFICACAO.md mostra como atualizar e testar a versão 1.5. Clique em um produto para abrir sua marca, adicione os itens e acompanhe o carrinho à direita. No celular, a aba Carrinho abre automaticamente após adicionar. Confira os dados de entrega e use Enviar pedido no rodapé, sem uma tela adicional de revisão. O assunto do e-mail identifica a empresa solicitante.
 
 ## Recuperação de notificações
 
@@ -134,7 +138,7 @@ Com o carrinho vazio, adicione uma unidade de Gin Sunset 750 ml e uma caixa dess
 
 Saia da conta antes de confirmar. Entre novamente e confira os dois itens. Para testar persistência completa, pare o servidor, inicie de novo e entre na mesma conta. Os itens devem reaparecer.
 
-Clique em Revisar pedido, confira endereço, itens e total e use Enviar pedido. O sistema mostra o número gerado, esvazia o carrinho e inclui o registro em Minha conta. Cada conta vê apenas seus próprios pedidos.
+No carrinho lateral, confira endereço, itens e total e use Enviar pedido. O sistema mostra o número gerado, esvazia o carrinho e inclui o registro em Meus pedidos. Cada conta vê apenas seus próprios pedidos.
 
 ### Registro do e-mail
 
@@ -148,7 +152,7 @@ O modo resend está implementado no backend. Para envio real, configure RESEND_A
 npm test
 ```
 
-A suíte contém onze testes e utiliza bancos temporários próprios e um servidor SMTP local de teste. Eles incluem sessão expirada, catálogo sem valores para visitantes, gravação da preferência de promoções e isolamento dos detalhes de pedidos entre contas. A migração verifica que contas e carrinhos anteriores continuam presentes e que os preços históricos dos pedidos são mantidos. Eles verificam os três perfis, os valores Kamai, as caixas de seis unidades, a exclusividade de 1,5 L, a proteção contra preço ou perfil enviados pelo navegador, cadastro, logout, persistência do carrinho, concorrência, pedido repetido e mensagem de e-mail em arquivo.
+A suíte contém doze testes e utiliza bancos temporários próprios e um servidor SMTP local de teste. Eles incluem sessão expirada, catálogo sem valores para visitantes, gravação da preferência de promoções e isolamento dos detalhes de pedidos entre contas. A migração verifica que contas e carrinhos anteriores continuam presentes e que os preços históricos dos pedidos são mantidos. Eles verificam os três perfis, os valores Kamai, as caixas de seis unidades, a exclusividade de 1,5 L, a proteção contra preço ou perfil enviados pelo navegador, cadastro, logout, persistência do carrinho, concorrência, pedido repetido e mensagem de e-mail em arquivo.
 
 ## 5. Edite o layout e o conteúdo
 
@@ -234,7 +238,7 @@ O arquivo SQLite fica em data/msc.sqlite. O Node executa schema.sql e importa si
 
 O servidor consulta precos_produto usando o perfil salvo na conta. Na confirmação, ele recalcula o total e grava pedido e itens na mesma transação. Essa transação também esvazia o carrinho. O navegador envia uma chave para que repetir a confirmação retorne o mesmo pedido.
 
-A revisão tem uma versão do carrinho. Se os itens ou seus preços mudarem em outro acesso antes de confirmar, o servidor pede nova revisão. O logout apaga a sessão e mantém o carrinho no banco para o próximo acesso.
+O estado exibido tem uma versão do carrinho. Se os itens ou seus preços mudarem em outro acesso antes de confirmar, o servidor pede nova revisão. O logout apaga a sessão e mantém o carrinho no banco para o próximo acesso.
 
 Você pode abrir msc.sqlite em um visualizador SQLite e usar as consultas do arquivo consultas.sql. Para alterar os preços de forma durável nesta versão, edite src/catalogo.json. Os preços desse arquivo são importados novamente ao iniciar, substituindo alterações manuais na tabela comercial. O schema atual é para SQLite. Uma futura conexão MySQL ou PostgreSQL exigirá adaptar o driver e as consultas.
 

@@ -8,6 +8,14 @@ const escapar = (valor) => String(valor ?? '').replace(/[&<>"']/g, (letra) => ({
 })[letra]);
 const brl = (centavos) => dinheiro.format(centavos / 100);
 
+export function nomeEmpresaCurto(cliente) {
+  const nome = String(cliente.razao_social || cliente.nome || 'Cliente').replace(/[\r\n\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim() || 'Cliente';
+  if (Array.from(nome).length <= 40) return nome;
+  const corte = Array.from(nome).slice(0, 39).join('');
+  const espaco = corte.lastIndexOf(' ');
+  return (espaco > 22 ? corte.slice(0, espaco) : corte).trimEnd() + '…';
+}
+
 export async function montarEmailPedido(pedido, itens, representante = 'A14 Representações') {
   const cliente = JSON.parse(pedido.cliente_json);
   const endereco = cliente.endereco ?? {};
@@ -28,9 +36,11 @@ export async function montarEmailPedido(pedido, itens, representante = 'A14 Repr
   ];
   const linhasTexto = itens.map((item) => item.quantidade + ' × ' + item.nome + ' (' +
     item.apresentacao + ', ' + item.venda + ') — ' + brl(item.quantidade * item.preco_centavos));
-  const assunto = 'Novo pedido ' + representante + ' #' + pedido.id;
+  const nomeCliente = nomeEmpresaCurto(cliente);
+  const nomeRemetente = nomeCliente + ' via ' + representante;
+  const assunto = nomeCliente + ' enviou um novo pedido · #' + pedido.id;
   const texto = [
-    'Pedido #' + pedido.id, 'Data: ' + data.format(new Date(pedido.criado_em)),
+    assunto, 'Pedido #' + pedido.id, 'Data: ' + data.format(new Date(pedido.criado_em)),
     ...campos.map(([rotulo, valor]) => rotulo + ': ' + (valor ?? '')),
     '', ...linhasTexto, '', 'Total dos produtos: ' + brl(pedido.total_centavos),
     '', 'Planilha do pedido anexada.'
@@ -42,7 +52,9 @@ export async function montarEmailPedido(pedido, itens, representante = 'A14 Repr
     '</small></td><td align="center" style="padding:10px">' + item.quantidade +
     '</td><td align="right" style="padding:10px;white-space:nowrap">' + brl(item.preco_centavos) +
     '</td><td align="right" style="padding:10px;white-space:nowrap">' + brl(item.quantidade * item.preco_centavos) + '</td></tr>').join('');
+  const preheader = cliente.razao_social + ' · ' + cliente.nome + ' · ' + cliente.email + ' · Pedido #' + pedido.id;
   const html = '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><body style="margin:0;background:#f3f4f6;font:14px Arial,sans-serif;color:#17233d">' +
+    '<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">' + escapar(preheader) + '</div>' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 10px">' +
     '<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:100%;background:#fff;border:1px solid #e5e7eb">' +
     '<tr><td style="padding:24px;background:#1e3a8a;color:#fff"><p style="margin:0 0 8px">' + escapar(representante) +
@@ -108,5 +120,5 @@ export async function montarEmailPedido(pedido, itens, representante = 'A14 Repr
   sheet.pageSetup.printArea = 'A1:F' + totalRow;
   workbook.calcProperties.fullCalcOnLoad = true;
   const planilha = Buffer.from(await workbook.xlsx.writeBuffer());
-  return { assunto, texto, html, planilha, replyTo: cliente.email, nomeArquivo: 'pedido-' + pedido.id + '.xlsx' };
+  return { assunto, texto, html, planilha, replyTo: cliente.email, nomeRemetente, nomeArquivo: 'pedido-' + pedido.id + '.xlsx' };
 }

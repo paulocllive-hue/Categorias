@@ -9,7 +9,7 @@ import nodemailer from 'nodemailer';
 import ExcelJS from 'exceljs';
 import { criarAplicacao } from '../src/server.js';
 import { consultarCep } from '../src/cep.js';
-import { montarEmailPedido } from '../src/relatorio-pedido.js';
+import { montarEmailPedido, nomeEmpresaCurto } from '../src/relatorio-pedido.js';
 import { enviarRelatorio } from '../src/envio-email.js';
 import { abrirBanco } from '../src/banco.js';
 import { criarFilaEmail } from '../src/email.js';
@@ -59,6 +59,8 @@ test('CEP válido, inexistente, serviço indisponível e rota pública', async (
 
 test('e-mail HTML e planilha contêm empresa, CEP textual, endereço e valores corretos', async () => {
   const relatorio = await montarEmailPedido(pedido, itens);
+  assert.equal(relatorio.assunto, 'Empresa <Teste> & Filhos enviou um novo pedido · #99');
+  assert.equal(relatorio.nomeRemetente, 'Empresa <Teste> & Filhos via A14 Representações');
   assert.match(relatorio.html, /Empresa &lt;Teste&gt; &amp; Filhos/);
   assert.ok(!relatorio.html.includes('Empresa <Teste>'));
   assert.match(relatorio.html, /01001-000/);
@@ -75,6 +77,43 @@ test('e-mail HTML e planilha contêm empresa, CEP textual, endereço e valores c
   assert.equal(sheet.getCell('E19').value, 72);
   assert.equal(sheet.getCell('F19').value.result, 72);
   assert.equal(sheet.getCell('F21').value.result, 504);
+});
+
+test('empresa é abreviada no assunto e remetente mantém a conta autorizada nos três modos', async () => {
+  const nome = 'Empresa de Distribuição de Alimentos e Bebidas do Centro Oeste Ltda';
+  assert.ok(Array.from(nomeEmpresaCurto({ razao_social: nome })).length <= 40);
+  assert.ok(nomeEmpresaCurto({ razao_social: nome }).endsWith('…'));
+  assert.equal(nomeEmpresaCurto({ razao_social: 'Empresa\r\nBcc: teste', nome: 'Nome' }), 'Empresa Bcc: teste');
+  assert.equal(nomeEmpresaCurto({ nome: 'Responsável' }), 'Responsável');
+  const dados = { ...pedido, cliente_json: JSON.stringify({ ...cliente, razao_social: nome }) };
+  const relatorio = await montarEmailPedido(dados, itens);
+  assert.ok(relatorio.html.includes(nome));
+  let recebido;
+  await enviarRelatorio({ emailMode: 'smtp', emailFrom: 'A14 <pedidos@example.test>', emailTo: 'comercial@example.test' },
+    relatorio, 'identidade', { transporte: { sendMail: async (mensagem) => {
+      recebido = mensagem;
+      return { accepted: ['comercial@example.test'], rejected: [] };
+    } } });
+  assert.equal(recebido.from.address, 'pedidos@example.test');
+  assert.equal(recebido.from.name, relatorio.nomeRemetente);
+  assert.equal(recebido.replyTo, cliente.email);
+  let resend;
+  await enviarRelatorio({ emailMode: 'resend', emailFrom: 'pedidos@example.test', emailTo: 'comercial@example.test' },
+    relatorio, 'identidade-resend', { buscar: async (_url, config) => {
+      resend = JSON.parse(config.body);
+      return new Response('{}');
+    } });
+  assert.ok(resend.from.includes('<pedidos@example.test>'));
+  assert.ok(resend.from.includes(nomeEmpresaCurto({ razao_social: nome })));
+  assert.equal(resend.subject, relatorio.assunto);
+  assert.equal(resend.reply_to, cliente.email);
+  const pasta = await mkdtemp(join(tmpdir(), 'a14-identidade-'));
+  try {
+    await enviarRelatorio({ dataDir: pasta, emailMode: 'file', emailFrom: 'pedidos@example.test' }, relatorio, 'identidade-file');
+    const eml = await readFile(join(pasta, 'emails', 'pedido-99.eml'), 'utf8');
+    assert.match(eml, /From: .*\r?\n(?:[^\r\n]*\r?\n)*?[^\r\n]*<pedidos@example.test>/);
+    assert.match(eml, /Reply-To: comprador@example.test/);
+  } finally { await rm(pasta, { recursive: true, force: true }); }
 });
 
 test('SMTP local recebe o e-mail completo e o anexo Excel', async () => {

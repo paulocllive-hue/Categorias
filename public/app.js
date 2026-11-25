@@ -24,6 +24,8 @@ let demonstracao = false;
 let tela = '';
 let destino = null;
 let marcaAtual = '';
+let produtoAtual = '';
+let produtosPedido = [];
 let ocupado = false;
 let avisoTimer;
 let timerSessao;
@@ -98,6 +100,7 @@ function atualizarCabecalho() {
 
 function abrir(novaTela, rotulo) {
   tela = novaTela;
+  painel.classList.toggle('painel-pedido', novaTela === 'catalogo');
   titulo.textContent = rotulo;
   status('');
   conteudo.replaceChildren();
@@ -150,6 +153,8 @@ function limparSessaoLocal() {
   revisaoSessao++;
   itens = [];
   versaoCarrinho = null;
+  produtosPedido = [];
+  produtoAtual = '';
   destino = null;
   chaves.clear();
   produtosVitrine = produtosVitrine.map((produto) => ({ ...produto, preco_centavos: null }));
@@ -176,6 +181,7 @@ async function sincronizarSessao() {
   await carregarCatalogoVitrine();
   if (conta) salvarEstadoCarrinho(await api('/carrinho'));
   atualizarCabecalho();
+  if (tela === 'catalogo' && painel.open && conta) desenharCarrinho();
 }
 
 function validarContaCatalogo(catalogo) {
@@ -203,23 +209,50 @@ function detalheProduto(produto, textoPreco) {
   return linha;
 }
 
-async function mostrarCatalogo(marca) {
+async function mostrarCatalogo(marca, produto = '') {
   marcaAtual = marca;
+  produtoAtual = produto;
   if (!conta) return pedirLogin('catalogo');
-  abrir('catalogo', marcas[marca]);
-  status('Carregando produtos…');
-  const catalogo = await api('/catalogo');
+  abrir('catalogo', 'Fazer pedido · ' + marcas[marca]);
+  status('Carregando produtos e carrinho…');
+  const [catalogo, carrinho] = await Promise.all([api('/catalogo'), api('/carrinho')]);
   validarContaCatalogo(catalogo);
-  const { produtos, demonstracao: modoDemo } = catalogo;
-  demonstracao = modoDemo;
+  demonstracao = catalogo.demonstracao;
+  produtosPedido = catalogo.produtos.filter((item) => item.marca === marca && item.disponivel);
+  salvarEstadoCarrinho(carrinho);
+  atualizarCabecalho();
   status('');
-  avisoDemonstracao();
-  conteudo.append(criar('p', 'Tabela comercial · ' + perfis[conta.perfil]));
-  const lista = produtos.filter((produto) => produto.marca === marca && produto.disponivel);
-  if (!lista.length) conteudo.append(criar('p', 'Nenhum produto disponível nesta marca.'));
-  for (const produto of lista) {
+  montarAreaPedido();
+}
+
+function montarAreaPedido() {
+  const area = criar('div', '', 'pedido-layout');
+  area.dataset.aba = 'produtos';
+  const abas = criar('nav', '', 'pedido-abas');
+  abas.setAttribute('aria-label', 'Áreas do pedido');
+  const produtos = botao('Produtos', 'aba-produtos', 'pedido-aba');
+  produtos.setAttribute('aria-controls', 'pedido-selecao');
+  produtos.setAttribute('aria-pressed', 'true');
+  const carrinho = botao('Carrinho (' + itens.reduce((soma, item) => soma + item.quantidade, 0) + ')', 'aba-carrinho', 'pedido-aba');
+  carrinho.setAttribute('aria-controls', 'carrinho-lateral');
+  carrinho.setAttribute('aria-pressed', 'false');
+  abas.append(produtos, carrinho);
+
+  const selecao = criar('section', '', 'pedido-selecao');
+  selecao.id = 'pedido-selecao';
+  selecao.setAttribute('aria-labelledby', 'pedido-produtos-titulo');
+  const cabecalho = criar('div', '', 'pedido-selecao-cabecalho');
+  const rotulo = criar('h3', 'Escolha os produtos');
+  rotulo.id = 'pedido-produtos-titulo';
+  cabecalho.append(rotulo, criar('p', marcas[marcaAtual] + ' · Tabela de ' + perfis[conta.perfil]));
+  selecao.append(cabecalho);
+  if (demonstracao) selecao.append(criar('p', 'Ambiente de teste. Use dados fictícios.', 'demonstracao'));
+  if (!produtosPedido.length) selecao.append(criar('p', 'Nenhum produto disponível nesta marca.'));
+  for (const produto of produtosPedido) {
     if (produto.preco_centavos === null) throw Object.assign(new Error('Sua sessão expirou.'), { status: 401 });
     const linha = detalheProduto(produto, brl(produto.preco_centavos) + ' por ' + produto.venda);
+    linha.id = 'pedido-produto-' + produto.id;
+    linha.classList.toggle('produto-selecionado', produto.id === produtoAtual);
     const adicionar = botao('Adicionar', 'adicionar');
     adicionar.dataset.produto = produto.id;
     adicionar.setAttribute('aria-label', 'Adicionar ' + produto.nome + ' ' + produto.apresentacao);
@@ -227,82 +260,117 @@ async function mostrarCatalogo(marca) {
       linha.querySelector('.linha-detalhe').append(criar('small', produto.fonte_preco));
     }
     linha.append(adicionar);
-    conteudo.append(linha);
+    selecao.append(linha);
   }
-  const rodape = criar('div', '', 'painel-rodape');
-  rodape.append(botao('Ver carrinho', 'ver-carrinho'));
-  conteudo.append(rodape);
+  const lateral = criar('aside', '', 'pedido-carrinho');
+  lateral.id = 'carrinho-lateral';
+  lateral.setAttribute('aria-labelledby', 'carrinho-titulo');
+  const rodape = criar('div', '', 'pedido-acoes');
+  const resumo = criar('div', '', 'pedido-resumo');
+  resumo.id = 'pedido-resumo';
+  resumo.setAttribute('role', 'status');
+  const enviar = botao('Enviar pedido', 'enviar');
+  rodape.append(resumo, enviar);
+  area.append(abas, selecao, lateral, rodape);
+  conteudo.replaceChildren(area);
+  desenharCarrinho();
+  if (produtoAtual) {
+    const alvo = document.getElementById('pedido-produto-' + produtoAtual);
+    alvo?.scrollIntoView({ block: 'nearest' });
+    alvo?.querySelector('button')?.focus({ preventScroll: true });
+  }
+}
+
+function mostrarAbaPedido(aba, focar = false) {
+  const area = conteudo.querySelector('.pedido-layout');
+  if (!area) return;
+  area.dataset.aba = aba;
+  for (const botao of area.querySelectorAll('.pedido-aba')) {
+    botao.setAttribute('aria-pressed', String(botao.dataset.acao === 'aba-' + aba));
+  }
+  if (focar) {
+    const alvo = area.querySelector(aba === 'carrinho' ? '#carrinho-titulo' : '#pedido-produtos-titulo');
+    alvo.tabIndex = -1;
+    alvo.focus({ preventScroll: true });
+  }
+}
+
+function atualizarBotoesEnvio() {
+  const indisponivel = !itens.length || itens.some((item) => item.preco_centavos === null);
+  for (const enviar of conteudo.querySelectorAll('[data-acao="enviar"]')) enviar.disabled = ocupado || indisponivel;
 }
 
 function desenharCarrinho() {
-  conteudo.replaceChildren();
-  avisoDemonstracao();
-  if (!itens.length) {
-    conteudo.append(criar('p', 'Seu carrinho está vazio.'));
-    conteudo.append(botao('Voltar às marcas', 'marcas', 'link'));
-    return;
-  }
-
+  const lateral = conteudo.querySelector('#carrinho-lateral');
+  if (!lateral || !conta) return;
+  const rolagem = lateral.scrollTop;
+  lateral.replaceChildren();
+  const cabecalho = criar('div', '', 'carrinho-cabecalho');
+  const heading = criar('h3', 'Seu carrinho');
+  heading.id = 'carrinho-titulo';
+  cabecalho.append(heading, criar('p', 'Os itens ficam salvos na sua conta.'));
+  lateral.append(cabecalho);
+  if (!itens.length) lateral.append(criar('p', 'Seu carrinho está vazio. Adicione um produto para começar.', 'carrinho-vazio'));
   let total = 0;
-  let indisponivel = false;
   for (const produto of itens) {
     const disponivel = produto.preco_centavos !== null;
     const subtotal = disponivel ? produto.preco_centavos * produto.quantidade : 0;
     total += subtotal;
-    indisponivel ||= !disponivel;
-    const linha = detalheProduto(produto, disponivel ? brl(produto.preco_centavos) + ' cada · ' + brl(subtotal) : 'Remova este item para concluir.');
+    const linha = detalheProduto(produto, disponivel ? brl(produto.preco_centavos) + ' cada · ' + brl(subtotal) : 'Item indisponível. Remova para enviar.');
+    linha.classList.add('carrinho-item');
     const acoes = criar('div', '', 'linha-acoes');
-    const menos = botao(disponivel ? '−' : 'Remover', 'quantidade', disponivel ? 'quantidade-botao' : 'link');
-    menos.dataset.produto = produto.id;
-    menos.dataset.operacao = disponivel ? 'retirar' : 'remover';
-    menos.setAttribute('aria-label', 'Retirar ' + produto.nome + ' ' + (produto.apresentacao || ''));
-    acoes.append(menos, criar('span', String(produto.quantidade)));
     if (disponivel) {
+      const menos = botao('−', 'quantidade', 'quantidade-botao');
+      menos.dataset.produto = produto.id;
+      menos.dataset.operacao = 'retirar';
+      menos.setAttribute('aria-label', 'Diminuir quantidade de ' + produto.nome + ' ' + produto.apresentacao);
+      const quantidade = criar('span', String(produto.quantidade));
+      quantidade.setAttribute('aria-label', 'Quantidade: ' + produto.quantidade);
       const mais = botao('+', 'quantidade', 'quantidade-botao');
       mais.dataset.produto = produto.id;
       mais.dataset.operacao = 'adicionar';
       mais.setAttribute('aria-label', 'Aumentar quantidade de ' + produto.nome + ' ' + produto.apresentacao);
       mais.disabled = produto.quantidade >= 999;
-      acoes.append(mais);
+      acoes.append(menos, quantidade, mais);
     }
+    const remover = botao('Remover', 'quantidade', 'link carrinho-remover');
+    remover.dataset.produto = produto.id;
+    remover.dataset.operacao = 'remover';
+    remover.setAttribute('aria-label', 'Remover ' + produto.nome + ' ' + produto.apresentacao);
+    acoes.append(remover);
     linha.append(acoes);
-    conteudo.append(linha);
+    lateral.append(linha);
   }
-  const rodape = criar('div', '', 'painel-rodape');
-  rodape.append(criar('span', 'Total dos produtos · ' + brl(total)));
-  const concluir = botao('Revisar pedido', 'revisar');
-  concluir.disabled = indisponivel;
-  rodape.append(concluir, botao('Continuar escolhendo', 'marcas', 'link'));
-  conteudo.append(rodape);
+  const totalRotulo = criar('p', 'Total dos produtos · ' + brl(total), 'carrinho-total');
+  lateral.append(totalRotulo);
+  const entrega = criar('details', '', 'carrinho-entrega');
+  entrega.open = true;
+  entrega.append(criar('summary', 'Dados de entrega'));
+  const dados = criar('dl');
+  const campos = [ ['Empresa', conta.razao_social], ['CNPJ', conta.cnpj], ['Responsável', conta.nome],
+    ['E-mail', conta.email], ['Endereço', enderecoFormatado(conta.endereco)] ];
+  for (const [rotulo, valor] of campos) dados.append(criar('dt', rotulo), criar('dd', valor));
+  entrega.append(dados);
+  lateral.append(entrega, botao('Continuar escolhendo', 'aba-produtos', 'link continuar-escolhendo'));
+  const quantidade = itens.reduce((soma, item) => soma + item.quantidade, 0);
+  const aba = conteudo.querySelector('[data-acao="aba-carrinho"]');
+  if (aba) aba.textContent = 'Carrinho (' + quantidade + ')';
+  const resumo = conteudo.querySelector('#pedido-resumo');
+  resumo.replaceChildren(criar('strong', brl(total)), criar('small', quantidade + (quantidade === 1 ? ' item no pedido' : ' itens no pedido')));
+  lateral.scrollTop = rolagem;
+  atualizarBotoesEnvio();
 }
 
 async function mostrarCarrinho() {
   if (!conta) return pedirLogin('carrinho');
-  abrir('carrinho', 'Seu carrinho');
-  status('Carregando carrinho…');
-  salvarEstadoCarrinho(await api('/carrinho'));
-  atualizarCabecalho();
-  status('');
-  desenharCarrinho();
+  const marca = marcas[marcaAtual] ? marcaAtual : itens[0]?.marca || configuracaoSite.marcas[0].id;
+  await mostrarCatalogo(marca);
+  mostrarAbaPedido('carrinho');
 }
 
 function enderecoFormatado(e) {
-  return [e.logradouro + ', ' + e.numero, e.complemento, e.bairro, e.cidade + '/' + e.uf, e.cep].filter(Boolean).join(' · ');
-}
-
-function mostrarRevisao() {
-  abrir('revisao', 'Revisar pedido');
-  avisoDemonstracao();
-  conteudo.append(criar('strong', conta.razao_social), criar('p', 'Entrega · ' + enderecoFormatado(conta.endereco)));
-  let total = 0;
-  for (const item of itens) {
-    const subtotal = item.quantidade * item.preco_centavos;
-    total += subtotal;
-    conteudo.append(detalheProduto(item, item.quantidade + ' × ' + brl(item.preco_centavos) + ' · ' + brl(subtotal)));
-  }
-  const rodape = criar('div', '', 'painel-rodape');
-  rodape.append(criar('span', 'Total dos produtos · ' + brl(total)), botao('Enviar pedido', 'enviar'), botao('Editar carrinho', 'ver-carrinho', 'link'));
-  conteudo.append(rodape);
+  const cep = String(e.cep || '').replace(/^(\d{5})(\d{3})$/, '$1-$2');
+  return [e.logradouro + ', ' + e.numero, e.complemento, e.bairro, e.cidade + '/' + e.uf, cep].filter(Boolean).join(' · ');
 }
 
 async function mostrarConta() {
@@ -392,6 +460,8 @@ const acoes = {
   'detalhe-pedido': (elemento) => mostrarDetalhePedido(elemento.dataset.pedido),
   'mais-pedidos': (elemento) => mostrarMeusPedidos(elemento.dataset.antes),
   'ver-carrinho': mostrarCarrinho,
+  'aba-produtos': () => mostrarAbaPedido('produtos', true),
+  'aba-carrinho': () => mostrarAbaPedido('carrinho', true),
   marcas: () => {
     painel.close();
     location.hash = 'marcas';
@@ -400,16 +470,20 @@ const acoes = {
   adicionar: async (elemento) => {
     const id = elemento.dataset.produto;
     await mudarQuantidade(id, 'adicionar');
-    status('Produto adicionado. Seu carrinho foi salvo.');
+    desenharCarrinho();
+    mostrarAbaPedido('carrinho');
+    avisar('Produto adicionado. Seu carrinho foi salvo.');
+    if (window.matchMedia('(max-width: 900px)').matches) mostrarAbaPedido('carrinho', true);
   },
   quantidade: async (elemento) => {
     const { produto, operacao } = elemento.dataset;
     await mudarQuantidade(produto, operacao);
     desenharCarrinho();
-    const acao = [...conteudo.querySelectorAll('[data-acao="quantidade"]')].find((botao) => botao.dataset.produto === produto && !botao.disabled);
-    (acao ?? titulo).focus({ preventScroll: true });
+    const acao = [...conteudo.querySelectorAll('[data-acao="quantidade"]')].find((botao) => botao.dataset.produto === produto && botao.dataset.operacao === operacao && !botao.disabled);
+    const alvo = acao ?? conteudo.querySelector('#carrinho-titulo');
+    alvo.tabIndex = alvo.tabIndex < 0 ? -1 : alvo.tabIndex;
+    alvo.focus({ preventScroll: true });
   },
-  revisar: mostrarRevisao,
   enviar: async () => {
     let pedido;
     try {
@@ -446,6 +520,7 @@ async function executar(operacao, elemento) {
   if (ocupado) return;
   ocupado = true;
   if (elemento) elemento.disabled = true;
+  atualizarBotoesEnvio();
   try {
     await operacao();
   } catch (erro) {
@@ -461,6 +536,10 @@ async function executar(operacao, elemento) {
   } finally {
     ocupado = false;
     if (elemento) elemento.disabled = false;
+    atualizarBotoesEnvio();
+    if (elemento?.isConnected && !elemento.disabled && document.activeElement === document.body) {
+      elemento.focus({ preventScroll: true });
+    }
     if (sincronizacaoPendente) {
       sincronizacaoPendente = false;
       void executar(sincronizarSessao);
@@ -537,7 +616,7 @@ document.addEventListener('click', (evento) => {
   if (!elemento) return;
   void executar(async () => {
     await inicializacao;
-    await mostrarCatalogo(elemento.dataset.marca);
+    await mostrarCatalogo(elemento.dataset.marca, elemento.dataset.produto || '');
   });
 });
 
@@ -581,7 +660,7 @@ conteudo.addEventListener('submit', (evento) => {
     salvarEstadoCarrinho(await api('/carrinho'));
     atualizarCabecalho();
     await carregarCatalogoVitrine();
-    if (proximaTela === 'catalogo') return mostrarCatalogo(marcaAtual);
+    if (proximaTela === 'catalogo') return mostrarCatalogo(marcaAtual, produtoAtual);
     if (proximaTela === 'carrinho') return mostrarCarrinho();
     if (proximaTela === 'pedidos') return mostrarMeusPedidos();
     return mostrarConta();
@@ -728,7 +807,12 @@ function renderizarCatalogoVitrine() {
         info.append(criar('p', brl(produto.preco_centavos), 'produto-preco'));
         if (produto.fonte_preco === 'Preço ilustrativo de teste') info.append(criar('p', produto.fonte_preco));
       }
-      card.append(foto, info);
+      const selecionar = botao('Selecionar produto', 'selecionar-produto', 'produto-abrir');
+      selecionar.dataset.marca = marca.id;
+      selecionar.dataset.produto = produto.id;
+      selecionar.setAttribute('aria-label', 'Fazer pedido de ' + produto.nome + ' ' + produto.apresentacao + ' ' + produto.venda);
+      selecionar.replaceChildren(criar('span', 'Selecionar produto', 'somente-leitor'));
+      card.append(foto, info, selecionar);
       grade.append(card);
     }
     const rodape = criar('div', '', 'marca-rodape');

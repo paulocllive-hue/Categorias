@@ -23,9 +23,11 @@ async function gravar(arquivo, conteudo) {
 }
 
 export async function enviarRelatorio(config, relatorio, chave, dependencias = {}) {
+  const enderecoRemetente = config.emailFrom?.match(/<([^<>]+)>/)?.[1]?.trim() || config.emailFrom || 'pedidos@example.test';
+  const remetente = relatorio.nomeRemetente ? { name: relatorio.nomeRemetente, address: enderecoRemetente } : config.emailFrom;
   const dominio = config.emailFrom?.match(/@([a-zA-Z0-9.-]+)/)?.[1] || 'a14.local';
   const mensagem = {
-    from: config.emailFrom,
+    from: remetente,
     to: config.emailTo,
     replyTo: relatorio.replyTo,
     subject: relatorio.assunto,
@@ -48,7 +50,7 @@ export async function enviarRelatorio(config, relatorio, chave, dependencias = {
     const preview = nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'windows' });
     const { message } = await preview.sendMail({
       ...mensagem,
-      from: config.emailFrom || 'A14 <pedidos@example.test>',
+      from: remetente || 'A14 <pedidos@example.test>',
       to: config.emailTo || 'comercial@example.test'
     });
     await gravar(base + '.eml', message);
@@ -71,7 +73,10 @@ export async function enviarRelatorio(config, relatorio, chave, dependencias = {
       'Idempotency-Key': chave
     },
     body: JSON.stringify({
-      from: config.emailFrom, to: [config.emailTo], reply_to: relatorio.replyTo,
+      from: relatorio.nomeRemetente
+        ? '"' + relatorio.nomeRemetente.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '" <' + enderecoRemetente + '>'
+        : config.emailFrom,
+      to: [config.emailTo], reply_to: relatorio.replyTo,
       subject: relatorio.assunto, text: relatorio.texto, html: relatorio.html,
       attachments: [{ filename: relatorio.nomeArquivo, content: relatorio.planilha.toString('base64') }]
     }),
